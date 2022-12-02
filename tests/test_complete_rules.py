@@ -1160,6 +1160,7 @@ class AtomicTryBlock(Rule):
 @pytest.mark.parametrize(
     "rule",
     [
+        MakeFunctionAsyncWithDecorators,
         ReplaceNexts,
         ReplacePlaceholders,
         PropagateConstants,
