@@ -78,10 +78,6 @@ class _LazyActionMixin(Generic[K, T], BaseAction):
 
 class _ReplaceCodeSegmentAction(BaseAction):
     def apply(self, context: Context, source: str) -> str:
-        # The decorators are removed in the 'lines' but present in the 'context`
-        # This lead to the 'replacement' containing the decorators and the returned
-        # 'lines' to duplicate them. Proposed workaround is to add the decorators in
-        # the 'view', in case the '_resynthesize()' adds/modifies them
         lines = split_lines(source, encoding=context.file_info.get_encoding())
         (
             lineno,
