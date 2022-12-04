@@ -399,7 +399,7 @@ class OnlyKeywordArgumentDefaultNotSetCheckRule(Rule):
 
 class AwaitifierAction(LazyReplace):
     def build(self):
-        if isinstance(self.node, ast.Expr):
+        if isinstance(self.node, ast.Expr) or isinstance(self.node, ast.Assign):
             self.node.value = ast.Await(self.node.value)
             return self.node
         if isinstance(self.node, ast.Call):
@@ -413,6 +413,9 @@ class MakeCallAwait(Rule):
         call(
             arg0,
              arg1) # Intentional mis-alignment
+
+        res = self.call(
+            self.data0, self.data1)
     """
 
     EXPECTED_SOURCE = """
@@ -420,10 +423,13 @@ class MakeCallAwait(Rule):
         await call(
             arg0,
              arg1) # Intentional mis-alignment
+
+        res = await self.call(
+            self.data0, self.data1)
     """
 
     def match(self, node):
-        assert isinstance(node, ast.Expr)
+        assert isinstance(node, ast.Expr) or isinstance(node, ast.Assign)
         assert isinstance(node.value, ast.Call)
         return AwaitifierAction(node)
 
