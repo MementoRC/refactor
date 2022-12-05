@@ -302,6 +302,9 @@ class MakeFunctionAsyncWithDecorators(Rule):
     @deco1(arg0,
            arg1)
     def something():
+    # Test
+        
+        # Comment
         a += .1
         '''you know
             this is custom
@@ -315,11 +318,14 @@ class MakeFunctionAsyncWithDecorators(Rule):
             right + "?")
     """
 
+    # Lines with spaces get removed from this variable
     EXPECTED_SOURCE = """
     @deco0
     @deco1(arg0,
            arg1)
     async def something():
+        
+        # Comment
         a += .1
         '''you know
             this is custom

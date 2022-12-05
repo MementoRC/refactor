@@ -65,7 +65,7 @@ class Lines(UserList[StringType]):
         """
 
         def _is_original(i: int) -> bool:
-            return index < len(source_data) and str(self.data[i]) == find_common_chars(str(self.data[i]), str(source_data[i].data))
+            return i < len(source_data) and str(self.data[i]) == find_common_chars(str(self.data[i]), str(source_data[i].data))
 
         for index, line in enumerate(self.data):
             if index == 0:
@@ -175,7 +175,7 @@ class PreciseUnparser(BaseUnparser):
         if not did_retrieve:
             super().traverse(node)
 
-    def maybe_retrieve(self, node: ast.AST) -> bool:
+    def maybe_retrieve(self, node: ast.stmt) -> bool:
         # Process:
         #   - Check whether the unparser has access to the
         #     current source code.
@@ -223,7 +223,7 @@ class PreciseUnparser(BaseUnparser):
         return is_same_ast
 
     @contextmanager
-    def _collect_stmt_comments(self, node: ast.AST) -> Iterator[None]:
+    def _collect_stmt_comments(self, node: ast.stmt) -> ContextManager[None]:
         def _write_if_unseen_comment(
             line_no: int,
             line: str,
@@ -247,10 +247,10 @@ class PreciseUnparser(BaseUnparser):
         preceding_comments = []
         for offset, line in enumerate(reversed(lines[:node_start])):
             comment_begin = line.find("#")
-            if comment_begin == -1 or comment_begin != node.col_offset:
+            if (line or line.isspace()) and (comment_begin == -1 or comment_begin != node.col_offset):
                 break
 
-            preceding_comments.append((node_start - offset, line, comment_begin))
+            preceding_comments.append((node_start - offset, line, node.col_offset))
 
         for comment_info in reversed(preceding_comments):
             _write_if_unseen_comment(*comment_info)
@@ -259,13 +259,13 @@ class PreciseUnparser(BaseUnparser):
 
         for offset, line in enumerate(lines[node_end:], 1):
             comment_begin = line.find("#")
-            if comment_begin == -1 or comment_begin != node.col_offset:
+            if (line or line.isspace()) and (comment_begin == -1 or comment_begin != node.col_offset):
                 break
 
             _write_if_unseen_comment(
                 line_no=node_end + offset,
                 line=line,
-                comment_begin=comment_begin,
+                comment_begin=node.col_offset,
             )
 
     def collect_comments(self, node: ast.AST) -> ContextManager[None]:
@@ -275,7 +275,7 @@ class PreciseUnparser(BaseUnparser):
             return nullcontext()
 
     def retrieve_segment(self, node: ast.AST, segment: str) -> None:
-        with self.collect_comments(node):
+        with self.collect_empty_lines(node):
             if isinstance(node, ast.stmt):
                 self.fill()
             self.write(segment)
