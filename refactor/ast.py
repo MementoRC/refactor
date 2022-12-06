@@ -247,7 +247,7 @@ class PreciseUnparser(BaseUnparser):
         preceding_comments = []
         for offset, line in enumerate(reversed(lines[:node_start])):
             comment_begin = line.find("#")
-            if (line or line.isspace()) and (comment_begin == -1 or comment_begin != node.col_offset):
+            if (comment_begin == -1 or comment_begin != node.col_offset) and (line and not line.isspace()):
                 break
 
             preceding_comments.append((node_start - offset, line, node.col_offset))
@@ -259,7 +259,7 @@ class PreciseUnparser(BaseUnparser):
 
         for offset, line in enumerate(lines[node_end:], 1):
             comment_begin = line.find("#")
-            if (line or line.isspace()) and (comment_begin == -1 or comment_begin != node.col_offset):
+            if (comment_begin == -1 or comment_begin != node.col_offset) and (line and not line.isspace()):
                 break
 
             _write_if_unseen_comment(
@@ -275,7 +275,7 @@ class PreciseUnparser(BaseUnparser):
             return nullcontext()
 
     def retrieve_segment(self, node: ast.AST, segment: str) -> None:
-        with self.collect_empty_lines(node):
+        with self.collect_comments(node):
             if isinstance(node, ast.stmt):
                 self.fill()
             self.write(segment)
