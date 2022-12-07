@@ -302,8 +302,6 @@ class MakeFunctionAsyncWithDecorators(Rule):
     @deco1(arg0,
            arg1)
     def something():
-    # Test
-        
         # Comment
         a += .1
         '''you know
@@ -324,7 +322,6 @@ class MakeFunctionAsyncWithDecorators(Rule):
     @deco1(arg0,
            arg1)
     async def something():
-        
         # Comment
         a += .1
         '''you know

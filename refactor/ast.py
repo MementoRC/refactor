@@ -247,7 +247,7 @@ class PreciseUnparser(BaseUnparser):
         preceding_comments = []
         for offset, line in enumerate(reversed(lines[:node_start])):
             comment_begin = line.find("#")
-            if (comment_begin == -1 or comment_begin != node.col_offset) and (line and not line.isspace()):
+            if comment_begin == -1 or comment_begin != node.col_offset:
                 break
 
             preceding_comments.append((node_start - offset, line, node.col_offset))
@@ -259,7 +259,7 @@ class PreciseUnparser(BaseUnparser):
 
         for offset, line in enumerate(lines[node_end:], 1):
             comment_begin = line.find("#")
-            if (comment_begin == -1 or comment_begin != node.col_offset) and (line and not line.isspace()):
+            if comment_begin == -1 or comment_begin != node.col_offset:
                 break
 
             _write_if_unseen_comment(
