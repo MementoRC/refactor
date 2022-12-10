@@ -34,11 +34,11 @@ class Lines(UserList[StringType]):
         return "".join(map(str, self.lines))
 
     def apply_indentation(
-        self,
-        indentation: StringType,
-        *,
-        start_prefix: AnyStringType = "",
-        end_suffix: AnyStringType = "",
+            self,
+            indentation: StringType,
+            *,
+            start_prefix: AnyStringType = "",
+            end_suffix: AnyStringType = "",
     ) -> None:
         """Apply the given indentation, optionally with start and end prefixes
         to the bound source lines."""
@@ -53,19 +53,20 @@ class Lines(UserList[StringType]):
             self.data[-1] += str(end_suffix)  # type: ignore
 
     def apply_indentation_from_source(
-        self,
-        indentation: StringType,
-        source_data: List[StringType],
-        *,
-        start_prefix: AnyStringType = "",
-        end_suffix: AnyStringType = "",
+            self,
+            indentation: StringType,
+            source_data: List[StringType],
+            *,
+            start_prefix: AnyStringType = "",
+            end_suffix: AnyStringType = "",
     ) -> None:
         """Apply the given indentation only if the corresponding line in the source is different,
         optionally with start and end prefixes to the bound source lines.
         """
 
         def _is_original(i: int) -> bool:
-            return i < len(source_data) and str(self.data[i]) == find_common_chars(str(self.data[i]), str(source_data[i].data))
+            return i < len(source_data) and str(self.data[i]) == find_common_chars(str(self.data[i]),
+                                                                                   str(source_data[i].data))
 
         for index, line in enumerate(self.data):
             if index == 0:
@@ -102,7 +103,7 @@ class SourceSegment(UserString):
             # re-implements the direct indexing as slicing (e.g. a[1] is a[1:2], with
             # error handling).
             direct_index = operator.index(index)
-            view = raw_line[direct_index : direct_index + 1].decode(
+            view = raw_line[direct_index: direct_index + 1].decode(
                 encoding=self.encoding
             )
             if not view:
@@ -225,9 +226,9 @@ class PreciseUnparser(BaseUnparser):
     @contextmanager
     def _collect_stmt_comments(self, node: ast.stmt) -> ContextManager[None]:
         def _write_if_unseen_comment(
-            line_no: int,
-            line: str,
-            comment_begin: int,
+                line_no: int,
+                line: str,
+                comment_begin: int,
         ) -> None:
             if line_no in self._visited_comment_lines:
                 # We have already written this comment as the
@@ -280,6 +281,7 @@ class PreciseUnparser(BaseUnparser):
                 self.fill()
             self.write(segment)
 
+
 class PreciseEmptyLinesUnparser(PreciseUnparser):
     """A more precise version of the default unparser,
     with various improvements such as comment handling
@@ -288,9 +290,9 @@ class PreciseEmptyLinesUnparser(PreciseUnparser):
     @contextmanager
     def _collect_stmt_comments(self, node: ast.AST) -> Iterator[None]:
         def _write_if_unseen_comment(
-            line_no: int,
-            line: str,
-            comment_begin: int,
+                line_no: int,
+                line: str,
+                comment_begin: int,
         ) -> None:
             if line_no in self._visited_comment_lines:
                 # We have already written this comment as the
@@ -332,5 +334,5 @@ class PreciseEmptyLinesUnparser(PreciseUnparser):
             )
 
 
-
-UNPARSER_BACKENDS = {"fast": BaseUnparser, "precise": PreciseUnparser, "precise_with_empty_lines": PreciseEmptyLinesUnparser}
+UNPARSER_BACKENDS = {"fast": BaseUnparser, "precise": PreciseUnparser,
+                     "precise_with_empty_lines": PreciseEmptyLinesUnparser}

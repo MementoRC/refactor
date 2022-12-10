@@ -21,7 +21,7 @@ class Configuration:
     debug_mode: whether to output more debug information.
     """
 
-    unparser: str | type[BaseUnparser] = "precise"
+    unparser: str | type[BaseUnparser] = "precise_with_empty_lines"
     debug_mode: bool = False
 
 
