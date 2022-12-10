@@ -34,11 +34,11 @@ class Lines(UserList[StringType]):
         return "".join(map(str, self.lines))
 
     def apply_indentation(
-            self,
-            indentation: StringType,
-            *,
-            start_prefix: AnyStringType = "",
-            end_suffix: AnyStringType = "",
+        self,
+        indentation: StringType,
+        *,
+        start_prefix: AnyStringType = "",
+        end_suffix: AnyStringType = "",
     ) -> None:
         """Apply the given indentation, optionally with start and end prefixes
         to the bound source lines."""
@@ -103,7 +103,7 @@ class SourceSegment(UserString):
             # re-implements the direct indexing as slicing (e.g. a[1] is a[1:2], with
             # error handling).
             direct_index = operator.index(index)
-            view = raw_line[direct_index: direct_index + 1].decode(
+            view = raw_line[direct_index:direct_index + 1].decode(
                 encoding=self.encoding
             )
             if not view:
@@ -226,9 +226,9 @@ class PreciseUnparser(BaseUnparser):
     @contextmanager
     def _collect_stmt_comments(self, node: ast.stmt) -> ContextManager[None]:
         def _write_if_unseen_comment(
-                line_no: int,
-                line: str,
-                comment_begin: int,
+            line_no: int,
+            line: str,
+            comment_begin: int,
         ) -> None:
             if line_no in self._visited_comment_lines:
                 # We have already written this comment as the
@@ -290,9 +290,9 @@ class PreciseEmptyLinesUnparser(PreciseUnparser):
     @contextmanager
     def _collect_stmt_comments(self, node: ast.AST) -> Iterator[None]:
         def _write_if_unseen_comment(
-                line_no: int,
-                line: str,
-                comment_begin: int,
+            line_no: int,
+            line: str,
+            comment_begin: int,
         ) -> None:
             if line_no in self._visited_comment_lines:
                 # We have already written this comment as the
@@ -324,7 +324,7 @@ class PreciseEmptyLinesUnparser(PreciseUnparser):
 
         for offset, line in enumerate(lines[node_end:], 1):
             comment_begin = line.find("#")
-            if (line and not line.isspace()) and (comment_begin == -1 or comment_begin != node.col_offset):
+            if comment_begin == -1 or comment_begin != node.col_offset:
                 break
 
             _write_if_unseen_comment(
