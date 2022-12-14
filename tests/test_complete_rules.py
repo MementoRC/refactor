@@ -18,8 +18,9 @@ from refactor.actions import (
     LazyInsertBefore,
     InsertAfter,
     LazyInsertAfter,
+    LazyInsertAfterWithSeparator,
     LazyReplace,
-    Replace,
+    Replace, InsertAfterWithSeparator, InsertBeforeWithSeparator,
 )
 from refactor.ast import DEFAULT_ENCODING
 from refactor.context import Representative, Scope, ScopeType
@@ -174,6 +175,19 @@ class ImportFinder(Representative):
 
 @dataclass
 class AddNewImport(LazyInsertAfter):
+    module: str
+    names: list[str]
+
+    def build(self):
+        return ast.ImportFrom(
+            level=0,
+            module=self.module,
+            names=[ast.alias(name) for name in self.names],
+        )
+
+
+@dataclass
+class AddNewImportWithSeparator(LazyInsertAfterWithSeparator):
     module: str
     names: list[str]
 
@@ -1098,6 +1112,234 @@ class AtomicTryBlock(Rule):
             yield InsertAfter(node, remaining_try)
 
 
+class AtomicTryBlockBefore(Rule):
+    INPUT_SOURCE = """
+    def generate_index(base_path, active_path):
+        module_index = defaultdict(dict)
+        for base_file in base_path.glob("**/*.py"):
+            file_name = str(base_file.relative_to(base_path))
+            active_file = active_path / file_name
+            module_name = file_name.replace('/', '.').removesuffix('.py')
+            if 'test.' in module_name or '.tests' in module_name or 'encoding' in module_name or 'idle_test' in module_name:
+                continue
+
+            try:
+                base_tree = get_tree(base_file, module_name)
+                active_tree = get_tree(active_file, module_name)
+                third_tree = get_tree(third_tree, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue
+
+            print('processing ', module_name)
+            try:
+                base_tree = get_tree(base_file, module_name)
+                active_tree = get_tree(active_file, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue"""
+
+    EXPECTED_SOURCE = """
+    def generate_index(base_path, active_path):
+        module_index = defaultdict(dict)
+        for base_file in base_path.glob("**/*.py"):
+            file_name = str(base_file.relative_to(base_path))
+            active_file = active_path / file_name
+            module_name = file_name.replace('/', '.').removesuffix('.py')
+            if 'test.' in module_name or '.tests' in module_name or 'encoding' in module_name or 'idle_test' in module_name:
+                continue
+
+            try:
+                active_tree = get_tree(active_file, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue
+            try:
+                third_tree = get_tree(third_tree, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue
+            try:
+                base_tree = get_tree(base_file, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue
+
+            print('processing ', module_name)
+            try:
+                active_tree = get_tree(active_file, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue
+            try:
+                base_tree = get_tree(base_file, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue"""
+
+    def match(self, node: ast.AST) -> Iterator[Replace | InsertBefore]:
+        assert isinstance(node, ast.Try)
+        assert len(node.body) >= 2
+
+        new_trys = []
+        for stmt in node.body:
+            new_try = common.clone(node)
+            new_try.body = [stmt]
+            new_trys.append(new_try)
+
+        first_try, *remaining_trys = new_trys
+        yield Replace(node, first_try)
+        for remaining_try in reversed(remaining_trys):
+            yield InsertBefore(node, remaining_try)
+
+
+class AtomicTryBlockWithSeparator(Rule):
+    INPUT_SOURCE = """
+    def generate_index(base_path, active_path):
+        module_index = defaultdict(dict)
+        for base_file in base_path.glob("**/*.py"):
+            file_name = str(base_file.relative_to(base_path))
+            active_file = active_path / file_name
+            module_name = file_name.replace('/', '.').removesuffix('.py')
+            if 'test.' in module_name or '.tests' in module_name or 'encoding' in module_name or 'idle_test' in module_name:
+                continue
+
+            try:
+                base_tree = get_tree(base_file, module_name)
+                active_tree = get_tree(active_file, module_name)
+                third_tree = get_tree(third_tree, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue
+
+            print('processing ', module_name)
+            try:
+                base_tree = get_tree(base_file, module_name)
+                active_tree = get_tree(active_file, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue"""
+
+    EXPECTED_SOURCE = """
+    def generate_index(base_path, active_path):
+        module_index = defaultdict(dict)
+        for base_file in base_path.glob("**/*.py"):
+            file_name = str(base_file.relative_to(base_path))
+            active_file = active_path / file_name
+            module_name = file_name.replace('/', '.').removesuffix('.py')
+            if 'test.' in module_name or '.tests' in module_name or 'encoding' in module_name or 'idle_test' in module_name:
+                continue
+
+            try:
+                base_tree = get_tree(base_file, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue
+
+            try:
+                active_tree = get_tree(active_file, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue
+
+            try:
+                third_tree = get_tree(third_tree, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue
+
+            print('processing ', module_name)
+            try:
+                base_tree = get_tree(base_file, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue
+
+            try:
+                active_tree = get_tree(active_file, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue"""
+
+    def match(self, node: ast.AST) -> Iterator[Replace | LazyInsertAfterWithSeparator]:
+        assert isinstance(node, ast.Try)
+        assert len(node.body) >= 2
+
+        new_trys = []
+        for stmt in node.body:
+            new_try = common.clone(node)
+            new_try.body = [stmt]
+            new_trys.append(new_try)
+
+        first_try, *remaining_trys = new_trys
+        yield Replace(node, first_try)
+        for remaining_try in reversed(remaining_trys):
+            yield InsertAfterWithSeparator(node, remaining_try)
+
+
+class AtomicTryBlockBeforeWithSeparator(Rule):
+    INPUT_SOURCE = """
+    def generate_index(base_path, active_path):
+        module_index = defaultdict(dict)
+        for base_file in base_path.glob("**/*.py"):
+            file_name = str(base_file.relative_to(base_path))
+            active_file = active_path / file_name
+            module_name = file_name.replace('/', '.').removesuffix('.py')
+            if 'test.' in module_name or '.tests' in module_name or 'encoding' in module_name or 'idle_test' in module_name:
+                continue
+
+            try:
+                base_tree = get_tree(base_file, module_name)
+                active_tree = get_tree(active_file, module_name)
+                third_tree = get_tree(third_tree, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue
+
+            print('processing ', module_name)
+            try:
+                base_tree = get_tree(base_file, module_name)
+                active_tree = get_tree(active_file, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue"""
+
+    EXPECTED_SOURCE = """
+    def generate_index(base_path, active_path):
+        module_index = defaultdict(dict)
+        for base_file in base_path.glob("**/*.py"):
+            file_name = str(base_file.relative_to(base_path))
+            active_file = active_path / file_name
+            module_name = file_name.replace('/', '.').removesuffix('.py')
+            if 'test.' in module_name or '.tests' in module_name or 'encoding' in module_name or 'idle_test' in module_name:
+                continue
+
+            try:
+                active_tree = get_tree(active_file, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue
+
+            try:
+                third_tree = get_tree(third_tree, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue
+
+            try:
+                base_tree = get_tree(base_file, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue
+
+            print('processing ', module_name)
+            try:
+                active_tree = get_tree(active_file, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue
+
+            try:
+                base_tree = get_tree(base_file, module_name)
+            except (SyntaxError, FileNotFoundError):
+                continue"""
+
+    def match(self, node: ast.AST) -> Iterator[Replace | InsertBeforeWithSeparator]:
+        assert isinstance(node, ast.Try)
+        assert len(node.body) >= 2
+
+        new_trys = []
+        for stmt in node.body:
+            new_try = common.clone(node)
+            new_try.body = [stmt]
+            new_trys.append(new_try)
+
+        first_try, *remaining_trys = new_trys
+        yield Replace(node, first_try)
+        for remaining_try in reversed(remaining_trys):
+            yield InsertBeforeWithSeparator(node, remaining_try)
+
+
 @pytest.mark.parametrize(
     "rule",
     [
@@ -1117,6 +1359,9 @@ class AtomicTryBlock(Rule):
         PropagateAndDelete,
         FoldMyConstants,
         AtomicTryBlock,
+        AtomicTryBlockBefore,
+        AtomicTryBlockWithSeparator,
+        AtomicTryBlockBeforeWithSeparator,
     ],
 )
 def test_complete_rules(rule, tmp_path):
