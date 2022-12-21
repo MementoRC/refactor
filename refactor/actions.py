@@ -17,7 +17,9 @@ C = TypeVar("C")
 __all__ = [
     "BaseAction",
     "InsertAfter",
+    "InsertBefore",
     "LazyInsertAfter",
+    "LazyInsertBefore",
     "LazyReplace",
     "Replace",
     "Erase",
@@ -486,7 +488,7 @@ class Erase(_ReplaceCodeSegmentAction):
             return ""
 
     def _stack_effect(self) -> tuple[ast.AST, int]:
-        # Erasing a single node mean positions of all the followinng statements will
+        # Erasing a single node mean positions of all the following statements will
         # need to reduced by 1.
         return (self.node, -1)
 
@@ -506,6 +508,26 @@ class EraseOrReplace(Erase):
     def _resynthesize(self, context: Context) -> str:
         if self.is_critical_node(context):
             return context.unparse(self.target)
+        else:
+            return ""
+
+    def _stack_effect(self) -> tuple[ast.AST, int]:
+        raise NotImplementedError("EraseOrReplace doesn't support chained actions.")
+
+
+@dataclass
+class EraseOrRemoveParent(Erase):
+    """Erases the given `node` statement if it is not required (e.g. if it is not the
+    only child statement of the parent node). Otherwise replaces it with the re-synthesized
+    version of the given `target` statement (by default, it is ``pass``).
+    """
+
+    target: ast.stmt = field(default_factory=ast.Pass)
+
+    def _resynthesize(self, context: Context) -> str:
+        parent_field, parent_node = context.ancestry.infer(self.node)
+        if self.is_critical_node(context):
+            return EraseOrReplace(parent_node)
         else:
             return ""
 
