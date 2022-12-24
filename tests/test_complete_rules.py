@@ -1038,6 +1038,32 @@ class FoldMyConstants(Rule):
         return Replace(node, result)
 
 
+class WrapInFstring(Rule):
+    INPUT_SOURCE = """
+def f():
+    return '''
+a
+'''
+"""
+
+    EXPECTED_SOURCE = """
+def f():
+    return F('''
+a
+''')
+"""
+
+    def match(self, node: ast.AST) -> Replace:
+        assert isinstance(node, ast.Constant)
+
+        # Prevent wrapping F-strings that are already wrapped in F()
+        # Otherwise you get infinite F(F(F(F(...))))
+        parent = self.context.ancestry.get_parent(node)
+        assert not (isinstance(parent, ast.Call) and isinstance(parent.func, ast.Name) and parent.func.id == 'F')
+
+        return Replace(node, ast.Call(func=ast.Name(id="F"), args=[node], keywords=[]))
+
+
 class AtomicTryBlock(Rule):
     INPUT_SOURCE = """
     def generate_index(base_path, active_path):
@@ -1362,6 +1388,7 @@ class AtomicTryBlockBeforeWithSeparator(Rule):
         AtomicTryBlockBefore,
         AtomicTryBlockWithSeparator,
         AtomicTryBlockBeforeWithSeparator,
+        WrapInFstring
     ],
 )
 def test_complete_rules(rule, tmp_path):
