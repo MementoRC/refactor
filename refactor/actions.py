@@ -4,11 +4,11 @@ import ast
 import warnings
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
-from typing import Generic, TypeVar, cast, ClassVar
+from typing import Generic, TypeVar, cast
 
 from refactor.ast import split_lines
 from refactor.common import PositionType, _hint, clone, find_indent, position_for
-from refactor.context import Context, Representative
+from refactor.context import Context
 
 K = TypeVar("K")
 T = TypeVar("T")
@@ -18,8 +18,12 @@ __all__ = [
     "BaseAction",
     "InsertAfter",
     "InsertBefore",
+    "InsertAfterWithSeparator",
+    "InsertBeforeWithSeparator",
     "LazyInsertAfter",
     "LazyInsertBefore",
+    "LazyInsertAfterWithSeparator",
+    "LazyInsertBeforeWithSeparator",
     "LazyReplace",
     "Replace",
     "Erase",
