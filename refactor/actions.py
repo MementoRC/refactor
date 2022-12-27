@@ -191,7 +191,7 @@ class LazyInsertAfter(_LazyActionMixin[ast.stmt, ast.stmt]):
             markers=(self.node.lineno - 1, self.node.col_offset, None),
         )
 
-        if self.separator:
+        if hasattr(self, "separator") and self.separator:
             # Adding extra separating line
             replacement.insert(0, lines._newline_type)
 
@@ -238,7 +238,7 @@ class LazyInsertBefore(_LazyActionMixin[ast.stmt, ast.stmt]):
         replacement.apply_indentation(indentation, start_prefix=start_prefix)
         replacement[-1] += lines._newline_type
 
-        if self.separator:
+        if hasattr(self, "separator") and self.separator:
             # Adding extra separating line
             replacement.append(lines._newline_type)
 
