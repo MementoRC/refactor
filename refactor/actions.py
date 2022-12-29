@@ -347,7 +347,8 @@ class Erase(_ReplaceCodeSegmentAction):
                 raise RuntimeError(f"Couldn't find the parent of {self.node}.")
 
         parent_field_value = getattr(parent_node, parent_field)
-        return isinstance(parent_field_value, list) and len(parent_field_value) == 1
+        # Removing the `decorator_list' from critical node (how about args, elts, ...?)
+        return parent_field != "decorator_list" and isinstance(parent_field_value, list) and len(parent_field_value) == 1
 
     def _get_segment_span(self, context: Context) -> PositionType:
         return position_for(self.node)
