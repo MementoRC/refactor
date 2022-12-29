@@ -5,8 +5,9 @@ import textwrap
 import tokenize
 
 import pytest
+from refactor.common import position_for, clone
 
-from refactor import common
+from refactor import common, Context
 from refactor.ast import BaseUnparser, PreciseUnparser, split_lines
 
 
