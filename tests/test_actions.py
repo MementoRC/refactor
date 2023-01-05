@@ -10,7 +10,8 @@ import pytest
 from refactor.ast import DEFAULT_ENCODING
 
 from refactor import Session, common
-from refactor.actions import Erase, InvalidActionError, InsertAfter, Replace, InsertBefore, LazyInsertAfter, LazyInsertBefore
+from refactor.actions import Erase, InvalidActionError, InsertAfter, Replace, InsertBefore, LazyInsertAfter, \
+    LazyInsertBefore
 from refactor.context import Context
 from refactor.core import Rule
 
@@ -52,6 +53,7 @@ INVALID_ERASES_TREE = ast.parse(INVALID_ERASES)
 @dataclass
 class BuildInsertAfterBottom(LazyInsertAfter):
     separator: bool
+
     def build(self) -> ast.Await:
         await_st = ast.parse("await async_test()")
         return await_st
@@ -189,6 +191,28 @@ class TestInsertBeforeTop(Rule):
     def match(self, node: ast.AST) -> Iterator[InsertBefore]:
         assert isinstance(node, ast.Try)
         assert len(node.body) >= 2
+
+        await_st = ast.parse("await async_test()")
+        yield InsertBefore(node, cast(ast.stmt, await_st))
+        new_try = common.clone(node)
+        new_try.body = [node.body[0]]
+        yield Replace(node, cast(ast.AST, new_try))
+
+
+class TestInsertBeforeTopWithDecorator(Rule):
+    INPUT_SOURCE = """
+        @decorate
+        def test():
+            test_this()"""
+
+    EXPECTED_SOURCE = """
+        await async_test()
+        @decorate
+        def test():
+            test_this()"""
+
+    def match(self, node: ast.AST) -> Iterator[InsertBefore]:
+        assert isinstance(node, ast.FunctionDef)
 
         await_st = ast.parse("await async_test()")
         yield InsertBefore(node, cast(ast.stmt, await_st))
@@ -615,6 +639,7 @@ def test_erase_invalid(invalid_node):
         TestInsertAfterBottomWithSeparator,
         TestInsertAfterBottomWithSeparatorWithBuild,
         TestInsertBeforeTop,
+        TestInsertBeforeTopWithDecorator,
         TestInsertBeforeTopWithSeparator,
         TestInsertAfter,
         TestInsertBefore,

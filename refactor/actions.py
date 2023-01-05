@@ -230,12 +230,12 @@ class LazyInsertBefore(_LazyActionMixin[ast.stmt, ast.stmt]):
 
     def apply(self, context: Context, source: str) -> str:
         lines = split_lines(source, encoding=context.file_info.get_encoding())
-        indentation, start_prefix = find_indent(
-            lines[self.node.lineno - 1][: self.node.col_offset]
-        )
 
         replacement = split_lines(context.unparse(self.build()))
-        replacement.apply_indentation(indentation, start_prefix=start_prefix)
+        replacement.apply_source_formatting(
+            source_lines=lines,
+            markers=(self.node.lineno - 1, self.node.col_offset, None),
+        )
         replacement[-1] += lines._newline_type
 
         if hasattr(self, "separator") and self.separator:

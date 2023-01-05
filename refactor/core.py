@@ -136,6 +136,9 @@ class Session:
                 raise MaybeOverlappingActions(
                     "When using chained actions, individual actions should not"
                     " overlap with each other."
+                    f"\n   Action attempted: {action}"
+                    f"\n               Path: {path}"
+                    f"\n      Previous tree: {ast.unparse(previous_tree)}"
                 ) from None
             else:
                 shifts.append((path, stack_effect))
