@@ -10,6 +10,7 @@ import pytest
 from refactor.ast import DEFAULT_ENCODING
 
 from refactor import Session, common
+from refactor.common import clone
 from refactor.actions import Erase, InvalidActionError, InsertAfter, Replace, InsertBefore, LazyInsertAfter, \
     LazyInsertBefore
 from refactor.context import Context
@@ -57,6 +58,54 @@ class BuildInsertAfterBottom(LazyInsertAfter):
     def build(self) -> ast.Await:
         await_st = ast.parse("await async_test()")
         return await_st
+
+
+class TestInsertBeforeDecoratedFunction(Rule):
+    INPUT_SOURCE = """
+        @decorate
+        def decorated():
+            test_this()"""
+
+    EXPECTED_SOURCE = """
+        await async_test()
+        @decorate
+        async def decorated():
+            test_this()"""
+
+    def match(self, node: ast.AST) -> Iterator[InsertBefore]:
+        assert isinstance(node, ast.FunctionDef)
+
+        await_st = ast.parse("await async_test()")
+        yield InsertBefore(node, cast(ast.stmt, await_st))
+        new_node = clone(node)
+        new_node.__class__ = ast.AsyncFunctionDef
+        yield Replace(node, new_node)
+
+
+class TestInsertBeforeMultipleDecorators(Rule):
+    INPUT_SOURCE = """
+        @decorate0
+        @decorate1
+        @decorate2
+        def decorated():
+            test_this()"""
+
+    EXPECTED_SOURCE = """
+        await async_test()
+        @decorate0
+        @decorate1
+        @decorate2
+        async def decorated():
+            test_this()"""
+
+    def match(self, node: ast.AST) -> Iterator[InsertBefore]:
+        assert isinstance(node, ast.FunctionDef)
+
+        await_st = ast.parse("await async_test()")
+        yield InsertBefore(node, cast(ast.stmt, await_st))
+        new_node = clone(node)
+        new_node.__class__ = ast.AsyncFunctionDef
+        yield Replace(node, new_node)
 
 
 class TestInsertAfterBottom(Rule):
@@ -634,6 +683,8 @@ def test_erase_invalid(invalid_node):
 @pytest.mark.parametrize(
     "rule",
     [
+        TestInsertBeforeDecoratedFunction,
+        TestInsertBeforeMultipleDecorators,
         TestInsertAfterBottom,
         TestInsertAfterBottomWithBuild,
         TestInsertAfterBottomWithSeparator,

@@ -201,6 +201,19 @@ class AddNewImportBefore(LazyInsertBefore):
 
 
 @dataclass
+class AddNewImportBefore(LazyInsertBefore):
+    module: str
+    names: list[str]
+
+    def build(self):
+        return ast.ImportFrom(
+            level=0,
+            module=self.module,
+            names=[ast.alias(name) for name in self.names],
+        )
+
+
+@dataclass
 class ModifyExistingImport(LazyReplace):
     name: str
 

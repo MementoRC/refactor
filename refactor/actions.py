@@ -243,6 +243,8 @@ class LazyInsertBefore(_LazyActionMixin[ast.stmt, ast.stmt]):
             replacement.append(lines._newline_type)
 
         original_node_start = cast(int, self.node.lineno)
+        if hasattr(self.node, "decorator_list") and len(getattr(self.node, "decorator_list")) > 0:
+            original_node_start, _, _, _ = position_for(getattr(self.node, "decorator_list")[0])
         for line in reversed(replacement):
             lines.insert(original_node_start - 1, line)
 
