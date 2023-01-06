@@ -351,7 +351,6 @@ def foo():
     tree.body[0].body.pop()
 
     base = PreciseUnparser(source=source, empty_lines=True)
-    base = PreciseUnparser(source=source, empty_lines=True)
     assert base.unparse(tree) + "\n" == expected_src
 
 
