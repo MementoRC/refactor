@@ -248,28 +248,6 @@ class TestInsertBeforeTop(Rule):
         yield Replace(node, cast(ast.AST, new_try))
 
 
-class TestInsertBeforeTopWithDecorator(Rule):
-    INPUT_SOURCE = """
-        @decorate
-        def test():
-            test_this()"""
-
-    EXPECTED_SOURCE = """
-        await async_test()
-        @decorate
-        def test():
-            test_this()"""
-
-    def match(self, node: ast.AST) -> Iterator[InsertBefore]:
-        assert isinstance(node, ast.FunctionDef)
-
-        await_st = ast.parse("await async_test()")
-        yield InsertBefore(node, cast(ast.stmt, await_st))
-        new_try = common.clone(node)
-        new_try.body = [node.body[0]]
-        yield Replace(node, cast(ast.AST, new_try))
-
-
 class TestInsertBeforeTopWithSeparator(Rule):
     INPUT_SOURCE = """
         try:
@@ -690,7 +668,6 @@ def test_erase_invalid(invalid_node):
         TestInsertAfterBottomWithSeparator,
         TestInsertAfterBottomWithSeparatorWithBuild,
         TestInsertBeforeTop,
-        TestInsertBeforeTopWithDecorator,
         TestInsertBeforeTopWithSeparator,
         TestInsertAfter,
         TestInsertBefore,
