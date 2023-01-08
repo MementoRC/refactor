@@ -218,22 +218,24 @@ def test_precise_unparser_comments():
     """
     )
 
-    expected_src = textwrap.dedent(
-        """\
-    def foo():
-        # a
-        # a1
-        print()
-        # a2
-        print()
-        # b
-        # b2
-        print(
-            c # e
-        )
-        # c
-    """
+    # This removes spaces in newlines: expected_src = textwrap.dedent(
+    expected_src="""\
+def foo():
+    # indented but not connected comment
+    
+    # a
+    # a1
+    print()
+    # a2
+    print()
+    # b
+    
+    # b2
+    print(
+        c # e
     )
+    # c
+"""
 
     tree = ast.parse(source)
 

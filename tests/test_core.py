@@ -10,7 +10,7 @@ from refactor import common
 from refactor.actions import InsertAfter, LazyReplace, Replace
 from refactor.change import Change
 from refactor.context import Configuration, Context, Representative
-from refactor.core import Rule, Session
+from refactor.core import Rule, Session, RuleCollection
 
 fake_ctx = Context(source="<test>", tree=ast.AST())
 test_file = common._FileInfo()
@@ -20,22 +20,22 @@ test_file = common._FileInfo()
     "source, expected, target_func, replacement",
     [
         (
-            "2 + 2 == 4",
-            "2 + 2 == 5",
-            lambda mod: mod.body[0].value.comparators[0],
-            ast.Constant(5),
+                "2 + 2 == 4",
+                "2 + 2 == 5",
+                lambda mod: mod.body[0].value.comparators[0],
+                ast.Constant(5),
         ),
         (
-            "2       + 2 == 4",
-            "2       + 2 == 5",
-            lambda mod: mod.body[0].value.comparators[0],
-            ast.Constant(5),
+                "2       + 2 == 4",
+                "2       + 2 == 5",
+                lambda mod: mod.body[0].value.comparators[0],
+                ast.Constant(5),
         ),
         (
-            "2 + 2 == 4 # :)",
-            "2 + 2 == 5 # :)",
-            lambda mod: mod.body[0].value.comparators[0],
-            ast.Constant(5),
+                "2 + 2 == 4 # :)",
+                "2 + 2 == 5 # :)",
+                lambda mod: mod.body[0].value.comparators[0],
+                ast.Constant(5),
         ),
     ],
 )
@@ -49,20 +49,20 @@ def test_apply_simple(source, expected, target_func, replacement):
     "source, expected, target_func",
     [
         (
-            """
+                """
                 import x # comments
                 print(x.y) # comments here
                 def something(x, y):
                     return x + y # comments
             """,
-            """
+                """
                 import x # comments
                 import x
                 print(x.y) # comments here
                 def something(x, y):
                     return x + y # comments
             """,
-            lambda mod: mod.body[0],
+                lambda mod: mod.body[0],
         )
     ],
 )
@@ -108,46 +108,67 @@ class PlaceholderReplacer(Rule):
         return Replace(node, self.context["simple"].infer_value(node))
 
 
+class CollectPlusToMinusPlaceholderReplacerRule(RuleCollection):
+    rules = [PlusToMinusRule, PlaceholderReplacer]
+
+
 @pytest.mark.parametrize(
     "source, expected, rules",
     [
         ("1+1", "1 - 1", PlusToMinusRule),
         ("print(1 + 1)", "print(1 - 1)", PlusToMinusRule),
         (
-            "print(1 + 1, some_other_stuff) and 2 + 2",
-            "print(1 - 1, some_other_stuff) and 2 - 2",
-            PlusToMinusRule,
+                "print(1 + 1, some_other_stuff) and 2 + 2",
+                "print(1 - 1, some_other_stuff) and 2 - 2",
+                PlusToMinusRule,
         ),
         (
-            """
+                """
                 print(
                     1 +
                     2
                 )
             """,
-            """
+                """
                 print(
                     1 - 2
                 )
             """,
-            PlusToMinusRule,
+                PlusToMinusRule,
         ),
         (
-            "print(x, y, placeholder, z)",
-            "print(x, y, 42, z)",
-            PlaceholderReplacer,
+                "print(x, y, placeholder, z)",
+                "print(x, y, 42, z)",
+                PlaceholderReplacer,
         ),
     ]
     + [
         ("1*1", "1*1", PlusToMinusRule),
         (
-            "print(no,change,style)",
-            "print(no,change,style)",
-            PlusToMinusRule,
+                "print(no,change,style)",
+                "print(no,change,style)",
+                PlusToMinusRule,
         ),
     ],
 )
 def test_session_simple(source, rules, expected):
+    if isinstance(rules, type):
+        rules = [rules]
+
+    source = textwrap.dedent(source)
+    expected = textwrap.dedent(expected)
+
+    session = Session(rules)
+    assert session.run(source) == expected
+
+
+@pytest.mark.parametrize(
+    "source, expected, rules",
+    [
+        ("1+1", "1 - 1", CollectPlusToMinusPlaceholderReplacerRule),
+    ]
+)
+def test_session_collection(source, rules, expected):
     if isinstance(rules, type):
         rules = [rules]
 
@@ -240,8 +261,8 @@ INVALID_GENERATED_SOURCE_CODE = re.compile(
 def test_session_run_invalid_generated_code_debug_mode():
     session = Session([InvalidRule], config=Configuration(debug_mode=True))
     with pytest.raises(
-        ValueError,
-        match=INVALID_GENERATED_SOURCE_CODE,
+            ValueError,
+            match=INVALID_GENERATED_SOURCE_CODE,
     ) as exc_info:
         session.run("z = 1")
 

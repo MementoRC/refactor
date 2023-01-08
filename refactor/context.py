@@ -7,7 +7,7 @@ from dataclasses import dataclass, field, replace
 from enum import Enum, auto
 from functools import cached_property
 from pathlib import Path
-from typing import Any, ClassVar, DefaultDict, Protocol, cast
+from typing import Any, ClassVar, DefaultDict, Protocol, cast, Type, List, Generator, Deque, Set
 
 import refactor.common as common
 from refactor.ast import UNPARSER_BACKENDS, BaseUnparser
@@ -32,18 +32,30 @@ class _Dependable(Protocol):
         ...
 
 
-def _resolve_dependencies(
-    dependables: Iterable[type[_Dependable]],
-) -> set[type[Representative]]:
-    dependencies: set[type[Representative]] = set()
+def _deque_expand(
+        iterable: Iterable[Type[_Dependable] | Iterable[Type[_Dependable]]],
+) -> Deque[Type[_Dependable]]:
+    q = deque(iterable)
+    while q:
+        item = q.popleft()
+        if isinstance(item, Iterable):
+            q.extendleft(item)
+        else:
+            yield item
 
-    pool = deque(dependables)
+
+def _resolve_dependencies(
+        dependables: Iterable[Type[_Dependable] | Iterable[Type[_Dependable]]],
+) -> Set[Type[Representative]]:
+    dependencies: Set[Type[Representative]] = set()
+
+    pool = deque(_deque_expand(dependables))
     while pool:
-        dependable = pool.pop()
+        dependable: Type[_Dependable] = pool.pop()
         pool.extendleft(
-            dependency
-            for dependency in dependable.context_providers
-            if dependency not in dependencies
+            (cast(Type[_Dependable], dependency)
+             for dependency in dependable.context_providers
+             if dependency not in dependencies)
         )
 
         if issubclass(dependable, Representative):
@@ -70,14 +82,14 @@ class Context:
 
     @classmethod
     def _from_dependencies(
-        cls, dependencies: Iterable[type[Representative]], **kwargs: Any
+            cls, dependencies: Iterable[type[Representative]], **kwargs: Any
     ) -> Context:
         context = cls(**kwargs)
         context._import_dependencies(dependencies)
         return context
 
     def _import_dependencies(
-        self, representatives: Iterable[type[Representative]]
+            self, representatives: Iterable[type[Representative]]
     ) -> None:
         for raw_representative in representatives:
             representative = raw_representative(self)
@@ -311,7 +323,7 @@ class ScopeInfo(common._Singleton):
                 for identifier in common.unpack_lhs(node.target):
                     local_definitions[identifier].append(node)
             elif isinstance(
-                node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+                    node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
             ):
                 # def something(): ...
                 local_definitions[node.name].append(node)
@@ -373,7 +385,7 @@ class Scope(Representative):
             elif isinstance(parent, ast.ClassDef):
                 scope_type = ScopeType.CLASS
             elif isinstance(
-                parent, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+                    parent, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
             ):
                 scope_type = ScopeType.FUNCTION
             elif common.is_comprehension(parent):

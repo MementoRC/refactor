@@ -7,7 +7,7 @@ from collections.abc import Iterator
 from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import ClassVar, NoReturn
+from typing import ClassVar, NoReturn, Type, Tuple
 
 # TODO: remove the deprecated aliases on 1.0.0
 from refactor.actions import (  # unimport:skip
@@ -48,8 +48,8 @@ class Rule:
         return True
 
     def match(
-        self,
-        node: ast.AST,
+            self,
+            node: ast.AST,
     ) -> BaseAction | None | Iterator[BaseAction]:
         """Match the given ``node`` against current rule's scope.
 
@@ -61,17 +61,74 @@ class Rule:
 
 
 @dataclass
+class RuleCollection:
+    context_providers: ClassVar[tuple[type[Representative], ...]] = ()
+
+    rule_instances: list[Rule] = field(default_factory=list)
+
+    class _RuleIterator:
+        def __init__(self, rules: list[type[Rule]]) -> None:
+            self.rules = rules
+            self.index = 0
+
+        def __next__(self) -> Rule:
+            if self.index >= len(self.rules):
+                raise StopIteration
+
+            rule = self.rules[self.index]
+            self.index += 1
+            return rule
+
+    def __iter__(self) -> RuleCollection._RuleIterator:
+        return self._RuleIterator(self.rules)
+
+    def initialize_rules(
+            self,
+            context: Context,
+            path: Path | None,
+    ):
+        """Initialize all rules in the collection."""
+        self.rule_instances = [i for rule in self.rules if (i := rule(context)).check_file(path)]
+
+    def check_file(self, path: Path | None) -> bool:
+        """Check whether to process the given ``path``. If ``path`` is `None`,
+        that means the user has submitted a string to be processed.
+
+        By default it will always be `True` but can be overridden
+        in subclasses.
+        """
+        return True
+
+    def match(
+            self,
+            node: ast.AST,
+    ) -> Tuple[Rule, BaseAction | None | Iterator[BaseAction]]:
+        """Match the given ``node`` against current rule's scope.
+
+        On success, it will return a source code transformation action
+        (an instance of :class:`refactor.actions.BaseAction`). On failure
+        it might either raise an `AssertionError` or return `None`.
+        """
+        for rule in self.rule_instances:
+            match = rule.match(node)
+            if isinstance(match, BaseAction):
+                yield rule, match
+            elif isinstance(match, Iterator):
+                yield rule, next(match)
+
+
+@dataclass
 class Session:
     """A refactoring session that consists of a set of rules and a configuration."""
 
-    rules: list[type[Rule]] = field(default_factory=list)
+    rules: list[type[Rule] | RuleCollection] = field(default_factory=list)
     config: Configuration = field(default_factory=Configuration)
 
     def _initialize_rules(
-        self,
-        tree: ast.Module,
-        source: str,
-        file_info: _FileInfo,
+            self,
+            tree: ast.Module,
+            source: str,
+            file_info: _FileInfo,
     ) -> list[Rule]:
         context = Context._from_dependencies(
             _resolve_dependencies(self.rules),
@@ -80,28 +137,35 @@ class Session:
             file_info=file_info,
             config=self.config,
         )
-        return [
-            instance
-            for rule in self.rules
-            if (instance := rule(context)).check_file(file_info.path)
-        ]
+        instances: list[Rule | RuleCollection] = []
+        for rule_or_collection in self.rules:
+            if issubclass(rule_or_collection, RuleCollection):
+                # This extends the rules in the collection as part of the full chain
+                # instances.extend(rule_or_collection().initialize_rules(context))
+                # We want to initialize the rules, but keep the possibility of subgroup for intermediate tree update
+                (collection := rule_or_collection()).initialize_rules(context, file_info.path)
+                if collection.rule_instances and len(collection.rule_instances) > 0:
+                    instances.append(collection)
+            else:
+                instances.append(rule_or_collection(context))
+        return [i for i in instances if i.check_file(file_info.path)]
 
     def _apply_single(
-        self,
-        context: Context,
-        source_code: str,
-        action: BaseAction,
-        enable_optimizations: bool = True,
+            self,
+            context: Context,
+            source_code: str,
+            action: BaseAction,
+            enable_optimizations: bool = True,
     ) -> str:
         if enable_optimizations:
             action = optimize(action, context)
         return action.apply(context, source_code)
 
     def _apply_multiple(
-        self,
-        rule: Rule,
-        source_code: str,
-        actions: Iterator[BaseAction],
+            self,
+            rule: Rule,
+            source_code: str,
+            actions: Iterator[BaseAction],
     ) -> str:
         # Compute the path of the current node (against the starting tree).
         #
@@ -115,7 +179,7 @@ class Session:
         shifts: list[tuple[GraphPath, int]] = []
         previous_tree = rule.context.tree
         for action in actions:
-            input_node, stack_effect = action._stack_effect()
+            input_node, stack_effect = action.stack_effect()
 
             # We compute each path against the initial revision of the tree
             # since the rule who is producing them doesn't have access to the
@@ -142,7 +206,7 @@ class Session:
             else:
                 shifts.append((path, stack_effect))
 
-            updated_action = action._replace_input(updated_input)
+            updated_action = action.replace_input(updated_input)
             updated_context = rule.context.replace(
                 source=source_code, tree=previous_tree
             )
@@ -161,13 +225,34 @@ class Session:
                 return self._unparsable_source_code(source_code, exc)
         return source_code
 
+    def _run_collection(
+            self,
+            node,
+            source: str,
+            collection: RuleCollection,
+    ) -> str:
+        with suppress(AssertionError):
+            for rule, match in collection.match(node):
+                if match is None:
+                    continue
+                if isinstance(match, BaseAction):
+                    new_source = self._apply_single(rule.context, source, match)
+                elif isinstance(match, Iterator):
+                    new_source = self._apply_multiple(rule, source, match)
+                else:
+                    raise TypeError(
+                        f"Unexpected action type: {type(match).__name__}"
+                    )
+                return new_source
+        return source
+
     def _run(
-        self,
-        source: str,
-        file_info: _FileInfo,
-        *,
-        _changed: bool = False,
-        _known_sources: frozenset[str] = frozenset(),
+            self,
+            source: str,
+            file_info: _FileInfo,
+            *,
+            _changed: bool = False,
+            _known_sources: frozenset[str] = frozenset(),
     ) -> tuple[str, bool]:
         try:
             tree = ast.parse(source)
@@ -186,17 +271,24 @@ class Session:
 
             for rule in rules:
                 with suppress(AssertionError):
-                    match = rule.match(node)
-                    if match is None:
-                        continue
-                    elif isinstance(match, BaseAction):
-                        new_source = self._apply_single(rule.context, source, match)
-                    elif isinstance(match, Iterator):
-                        new_source = self._apply_multiple(rule, source, match)
-                    else:
-                        raise TypeError(
-                            f"Unexpected action type: {type(match).__name__}"
+                    if isinstance(rule, RuleCollection):
+                        new_source = self._run_collection(
+                            node,
+                            source,
+                            rule,
                         )
+                    else:
+                        match = rule.match(node)
+                        if match is None:
+                            continue
+                        elif isinstance(match, BaseAction):
+                            new_source = self._apply_single(rule.context, source, match)
+                        elif isinstance(match, Iterator):
+                            new_source = self._apply_multiple(rule, source, match)
+                        else:
+                            raise TypeError(
+                                f"Unexpected action type: {type(match).__name__}"
+                            )
 
                     if new_source not in _known_sources:
                         return self._run(

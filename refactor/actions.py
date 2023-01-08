@@ -7,7 +7,7 @@ from dataclasses import dataclass, field, replace
 from typing import Generic, TypeVar, cast
 
 from refactor.ast import split_lines
-from refactor.common import PositionType, _hint, clone, find_indent, position_for
+from refactor.common import PositionType, _hint, clone, position_for
 from refactor.context import Context
 
 K = TypeVar("K")
@@ -41,11 +41,11 @@ class BaseAction:
         version."""
         raise NotImplementedError
 
-    def _stack_effect(self) -> tuple[ast.AST, int]:
+    def stack_effect(self) -> tuple[ast.AST, int]:
         """Return the stack effect of this action (relative to the node it returns.)"""
         raise NotImplementedError("This action can't be chained, yet.")
 
-    def _replace_input(self, node: ast.AST) -> BaseAction:
+    def replace_input(self, node: ast.AST) -> BaseAction:
         """Replace the input node (source anchor) with the given node."""
         raise NotImplementedError("This action can't be chained, yet.")
 
@@ -74,7 +74,7 @@ class _LazyActionMixin(Generic[K, T], BaseAction):
         """Return a full copy of the original node."""
         return clone(self.node)
 
-    def _replace_input(self, node: ast.AST) -> _LazyActionMixin[K, T]:
+    def replace_input(self, node: ast.AST) -> _LazyActionMixin[K, T]:
         return replace(self, node=node)
 
 
@@ -140,7 +140,7 @@ class LazyReplace(_ReplaceCodeSegmentAction, _LazyActionMixin[ast.AST, ast.AST])
     def _resynthesize(self, context: Context) -> str:
         return context.unparse(self.build())
 
-    def _stack_effect(self) -> tuple[ast.AST, int]:
+    def stack_effect(self) -> tuple[ast.AST, int]:
         # Replacing a statement with another one won't cause any shifts
         # in the block.
         return (self.node, 0)
@@ -209,7 +209,7 @@ class LazyInsertAfter(_LazyActionMixin[ast.stmt, ast.stmt]):
 
         return lines.join()
 
-    def _stack_effect(self) -> tuple[ast.AST, int]:
+    def stack_effect(self) -> tuple[ast.AST, int]:
         # Adding a statement right after the node will need to be reflected
         # in the block.
         return (self.node, 1)
@@ -250,7 +250,7 @@ class LazyInsertBefore(_LazyActionMixin[ast.stmt, ast.stmt]):
 
         return lines.join()
 
-    def _stack_effect(self) -> tuple[ast.AST, int]:
+    def stack_effect(self) -> tuple[ast.AST, int]:
         # Adding a statement right before the node will need to be reflected
         # in the block.
         return (self.node, -1)
@@ -369,12 +369,12 @@ class Erase(_ReplaceCodeSegmentAction):
         else:
             return ""
 
-    def _stack_effect(self) -> tuple[ast.AST, int]:
+    def stack_effect(self) -> tuple[ast.AST, int]:
         # Erasing a single node mean positions of all the following statements will
         # need to reduced by 1.
         return (self.node, -1)
 
-    def _replace_input(self, node: ast.AST) -> Erase:
+    def replace_input(self, node: ast.AST) -> Erase:
         return replace(self, node=node)
 
 
@@ -393,5 +393,5 @@ class EraseOrReplace(Erase):
         else:
             return ""
 
-    def _stack_effect(self) -> tuple[ast.AST, int]:
+    def stack_effect(self) -> tuple[ast.AST, int]:
         raise NotImplementedError("EraseOrReplace doesn't support chained actions.")

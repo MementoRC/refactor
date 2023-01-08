@@ -154,7 +154,7 @@ class PreciseUnparser(BaseUnparser):
     for major statements and child node recovery."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        self.empty_lines = kwargs.pop("empty_lines", None)
+        self.empty_lines = kwargs.pop("empty_lines", True)
         self._visited_comment_lines: set[int] = set()
         super().__init__(*args, **kwargs)
 
