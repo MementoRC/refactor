@@ -7,7 +7,7 @@ from collections.abc import Iterator
 from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import ClassVar, NoReturn, Type, Tuple
+from typing import ClassVar, NoReturn, Tuple, Generator, Type, List
 
 # TODO: remove the deprecated aliases on 1.0.0
 from refactor.actions import (  # unimport:skip
@@ -60,54 +60,43 @@ class Rule:
         raise NotImplementedError
 
 
+class _IterableRuleCollection(type):
+    def __iter__(cls):
+        return iter(cls.rules)
+
+
 @dataclass
-class RuleCollection:
+class RuleCollection(metaclass=_IterableRuleCollection):
+    """Collects a set of Rule to be used as a standalone Rule in the Session's Rules"""
+    # This is unused but needed for the context iterator
     context_providers: ClassVar[tuple[type[Representative], ...]] = ()
 
+    # A rules attribute (same type as for Session) must be defined in the class
+    # not sure whether to initialize it as empty here, would it overwrite the user-defined
+    # at instantiation?
+    # rules: List[Type[Rule]] = field(default_factory=list)
+
     rule_instances: list[Rule] = field(default_factory=list)
-
-    class _RuleIterator:
-        def __init__(self, rules: list[type[Rule]]) -> None:
-            self.rules = rules
-            self.index = 0
-
-        def __next__(self) -> Rule:
-            if self.index >= len(self.rules):
-                raise StopIteration
-
-            rule = self.rules[self.index]
-            self.index += 1
-            return rule
-
-    def __iter__(self) -> RuleCollection._RuleIterator:
-        return self._RuleIterator(self.rules)
 
     def initialize_rules(
             self,
             context: Context,
             path: Path | None,
     ):
-        """Initialize all rules in the collection."""
+        """Initialize all rules in the collection. Intended to be called by the Session"""
         self.rule_instances = [i for rule in self.rules if (i := rule(context)).check_file(path)]
 
     def check_file(self, path: Path | None) -> bool:
-        """Check whether to process the given ``path``. If ``path`` is `None`,
-        that means the user has submitted a string to be processed.
-
-        By default it will always be `True` but can be overridden
-        in subclasses.
-        """
+        """This should always be True. It is needed as we want to seamlessly iterate as if it was a Rule"""
         return True
 
     def match(
             self,
             node: ast.AST,
-    ) -> Tuple[Rule, BaseAction | None | Iterator[BaseAction]]:
-        """Match the given ``node`` against current rule's scope.
+    ) -> Generator[tuple[Rule, BaseAction | None | Iterator[BaseAction]]]:
+        """Match the given ``node`` against all the rules in the collection.
 
-        On success, it will return a source code transformation action
-        (an instance of :class:`refactor.actions.BaseAction`). On failure
-        it might either raise an `AssertionError` or return `None`.
+        It yields tuples of all the Rule, BaseAction that match.
         """
         for rule in self.rule_instances:
             match = rule.match(node)
@@ -115,6 +104,7 @@ class RuleCollection:
                 yield rule, match
             elif isinstance(match, Iterator):
                 yield rule, next(match)
+        return
 
 
 @dataclass
@@ -140,9 +130,7 @@ class Session:
         instances: list[Rule | RuleCollection] = []
         for rule_or_collection in self.rules:
             if issubclass(rule_or_collection, RuleCollection):
-                # This extends the rules in the collection as part of the full chain
-                # instances.extend(rule_or_collection().initialize_rules(context))
-                # We want to initialize the rules, but keep the possibility of subgroup for intermediate tree update
+                # We want to initialize the rules, but keep the rules grouped for intermediate tree update
                 (collection := rule_or_collection()).initialize_rules(context, file_info.path)
                 if collection.rule_instances and len(collection.rule_instances) > 0:
                     instances.append(collection)
@@ -231,6 +219,7 @@ class Session:
             source: str,
             collection: RuleCollection,
     ) -> str:
+        """Run the given collection of rules against the given node"""
         with suppress(AssertionError):
             for rule, match in collection.match(node):
                 if match is None:

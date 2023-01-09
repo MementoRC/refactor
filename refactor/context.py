@@ -33,27 +33,27 @@ class _Dependable(Protocol):
 
 
 def _deque_expand(
-        iterable: Iterable[Type[_Dependable] | Iterable[Type[_Dependable]]],
-) -> Deque[Type[_Dependable]]:
-    q = deque(iterable)
+        iterable: Iterable[type[_Dependable] | Iterable[type[_Dependable]]],
+) -> Generator[type[_Dependable]]:
+    q: Deque[type[_Dependable] | Iterable[type[_Dependable]]] = deque(iterable)
     while q:
-        item = q.popleft()
-        if isinstance(item, Iterable):
-            q.extendleft(item)
+        item: type[_Dependable] | Iterable[type[_Dependable]] = q.popleft()
+        if hasattr(item, '__iter__') or isinstance(item, Iterable):
+            q.extendleft(iter(item))
         else:
             yield item
 
 
 def _resolve_dependencies(
-        dependables: Iterable[Type[_Dependable] | Iterable[Type[_Dependable]]],
+        dependables: Iterable[type[_Dependable] | Iterable[type[_Dependable]]],
 ) -> Set[Type[Representative]]:
-    dependencies: Set[Type[Representative]] = set()
+    dependencies: Set[type[Representative]] = set()
 
     pool = deque(_deque_expand(dependables))
     while pool:
-        dependable: Type[_Dependable] = pool.pop()
+        dependable: type[_Dependable] = pool.pop()
         pool.extendleft(
-            (cast(Type[_Dependable], dependency)
+            (cast(type[_Dependable], dependency)
              for dependency in dependable.context_providers
              if dependency not in dependencies)
         )
@@ -82,14 +82,14 @@ class Context:
 
     @classmethod
     def _from_dependencies(
-            cls, dependencies: Iterable[type[Representative]], **kwargs: Any
+        cls, dependencies: Iterable[type[Representative]], **kwargs: Any
     ) -> Context:
         context = cls(**kwargs)
         context._import_dependencies(dependencies)
         return context
 
     def _import_dependencies(
-            self, representatives: Iterable[type[Representative]]
+        self, representatives: Iterable[type[Representative]]
     ) -> None:
         for raw_representative in representatives:
             representative = raw_representative(self)
@@ -323,7 +323,7 @@ class ScopeInfo(common._Singleton):
                 for identifier in common.unpack_lhs(node.target):
                     local_definitions[identifier].append(node)
             elif isinstance(
-                    node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+                node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
             ):
                 # def something(): ...
                 local_definitions[node.name].append(node)
@@ -385,7 +385,7 @@ class Scope(Representative):
             elif isinstance(parent, ast.ClassDef):
                 scope_type = ScopeType.CLASS
             elif isinstance(
-                    parent, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+                parent, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
             ):
                 scope_type = ScopeType.FUNCTION
             elif common.is_comprehension(parent):
