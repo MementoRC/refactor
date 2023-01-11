@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import ast
+import dataclasses
 import tempfile
 import tokenize
+from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import ClassVar, NoReturn, Tuple, Generator, Type, List
+from typing import ClassVar, NoReturn, Tuple, Generator, Type, List, Dict, Optional, Protocol
 
 # TODO: remove the deprecated aliases on 1.0.0
 from refactor.actions import (  # unimport:skip
@@ -28,13 +30,25 @@ from refactor.context import (
 from refactor.internal.action_optimizer import optimize
 
 
+def _unparsable_source_code(source: str, exc: SyntaxError) -> NoReturn:
+    error_message = "Generated source is unparsable."
+
+    if Session.c_current_config.debug_mode:
+        fd, file_name = tempfile.mkstemp(prefix="refactor", text=True)
+        with open(fd, "w") as stream:
+            stream.write(source)
+        error_message += f"\nSee {file_name} for the generated source."
+
+    raise ValueError(error_message) from exc
+
+
 class MaybeOverlappingActions(Exception):
     pass
 
 
 @dataclass
 class Rule:
-    context_providers: ClassVar[tuple[type[Representative], ...]] = ()
+    context_providers: ClassVar[Tuple[Type[Representative], ...]] = ()
 
     context: Context
 
@@ -60,119 +74,152 @@ class Rule:
         raise NotImplementedError
 
 
-class _IterableRuleCollection(type):
-    def __iter__(cls):
-        return iter(cls.rules)
+class _IsIterable(type):
+    """Makes the class iterable in the sense of dependencies."""
+    context_providers: ClassVar[Tuple[Type[Representative], ...]] = ()
+
+    def __iter__(self) -> Iterator[RuleCollection]:
+        return iter(self.rules)
 
 
 @dataclass
-class RuleCollection(metaclass=_IterableRuleCollection):
+class RuleCollection(metaclass=_IsIterable):
     """Collects a set of Rule to be used as a standalone Rule in the Session's Rules"""
-    # This is unused but needed for the context iterator
-    context_providers: ClassVar[tuple[type[Representative], ...]] = ()
+    rule_instances: Dict[Type[Rule], Rule] = field(default_factory=dict)
+    collection_instances: Dict[Type[RuleCollection], RuleCollection] = field(default_factory=dict)
 
-    # A rules attribute (same type as for Session) must be defined in the class
-    # not sure whether to initialize it as empty here, would it overwrite the user-defined
-    # at instantiation?
-    # rules: List[Type[Rule]] = field(default_factory=list)
+    _indent: str = field(default="")
 
-    rule_instances: list[Rule] = field(default_factory=list)
+    _validated: bool = field(default=False, repr=False)
+    _initialized: bool = field(default=False, repr=False)
 
-    def initialize_rules(
-            self,
-            context: Context,
-            path: Path | None,
-    ):
+    def _validate_collection(self) -> bool:
+        """Check if the rules exists and are valid. Raise an error if not.
+        Always returns True on valid RunCollection, otherwise raises an error
+
+        :raises AttributeError: if the 'rules' attribute is not defined
+        :raises TypeError: if the rules attribute is not a list
+        :raises TypeError: if the rules attribute contains Rules or RuleCollections
+        :return: True if the collection is valid
+        """
+        if not isinstance(self.rules, list):
+            raise TypeError("RuleCollection.rules must be a list")
+        if not all(issubclass(rule, (Rule, RuleCollection)) for rule in self.rules):
+            for rule in self.rules:
+                if not issubclass(rule, (Rule, RuleCollection)):
+                    raise TypeError(f"RuleCollection.rules must contain only Rules or RuleCollections, not {rule}")
+
+        # Remove duplicates
+        setattr(self, "rules", list(set(self.rules)))
+
+        # Process collections within this collection. This is different, the collections need
+        # to be initialized with the context, but the rules do not.
+        for collection_type in self.rules:
+            if issubclass(collection_type, RuleCollection):
+                collection: RuleCollection = collection_type()
+                if collection._validate_collection():
+                    self.collection_instances[collection_type] = collection
+                else:
+                    del self.rules[self.rules.index(collection_type)]
+        self._validated = True
+
+        return self._validated
+
+    def initialize_rules(self, context: Context, path: Path | None = None) -> None:
         """Initialize all rules in the collection. Intended to be called by the Session"""
-        self.rule_instances = [i for rule in self.rules if (i := rule(context)).check_file(path)]
+        if not self._validated:
+            # Validate the collection before initializing, returns True or Raises an error
+            self._validate_collection()
+
+        for rule in self.rules:
+            # If the rule is a Rule, initialize it
+            if issubclass(rule, Rule) and (instance := rule(context)).check_file(path):
+                self.rule_instances[rule] = instance
+
+            # If the rule is a RuleCollection, call its initialization method
+            if issubclass(rule, RuleCollection):
+                self.collection_instances[rule].initialize_rules(context, path)
+
+        self._initialized = True
 
     def check_file(self, path: Path | None) -> bool:
-        """This should always be True. It is needed as we want to seamlessly iterate as if it was a Rule"""
-        return True
+        """This should always be True, as it is only called on the top level RuleCollection"""
+        return self._initialized
 
-    def match(
-            self,
-            node: ast.AST,
-    ) -> Generator[tuple[Rule, BaseAction | None | Iterator[BaseAction]]]:
+    def match(self, node: ast.AST) -> Generator[Tuple[Rule, BaseAction | None | Iterator[BaseAction]]]:
         """Match the given ``node`` against all the rules in the collection.
 
         It yields tuples of all the Rule, BaseAction that match.
+        :raises RuntimeError: if the RuleCollection is not initialized
+        :return: A generator of tuples of Rule, BaseAction
         """
-        for rule in self.rule_instances:
-            match = rule.match(node)
-            if isinstance(match, BaseAction):
-                yield rule, match
-            elif isinstance(match, Iterator):
-                yield rule, next(match)
+
+        if not self._initialized:
+            raise RuntimeError("RuleCollection must be initialized before matching")
+
+        # We keep the order of 'rules'
+        for rule_type in self.rules:
+            print(self._indent, "[RuleCollection] Rule:", rule_type)
+            # Only initialized rules are in the rule_instances dict
+            if rule_type in self.rule_instances.keys():
+                print(self._indent, "[RuleCollection]    Rule initialized")
+                # For the rules in the Collection, we need to suppress the AssertionError
+                # as it is not an error, it is just a failed match in the list of Rules
+                with suppress(AssertionError):
+                    matched_action = self.rule_instances[rule_type].match(node)
+                    rule = self.rule_instances[rule_type]
+                    print(self._indent, "[RuleCollection]    Pre yield:", rule.__class__.__name__, matched_action)
+                    yield rule, matched_action
+                    print(self._indent, "[RuleCollection]    Post-Matched:", rule.__class__.__name__, matched_action)
+            if rule_type in self.collection_instances.keys():
+                # If the rule is a RuleCollection, call its 'match' method - recursion?
+                yield from self.collection_instances[rule_type].match(node)
         return
 
 
-@dataclass
-class Session:
-    """A refactoring session that consists of a set of rules and a configuration."""
+@dataclass(frozen=True)
+class _SourceFromIterator:
+    """A match of a rule against a source file.
 
-    rules: list[type[Rule] | RuleCollection] = field(default_factory=list)
-    config: Configuration = field(default_factory=Configuration)
+    :param rule: The rule that matched
+    :param action: The action or action iterator that was returned by the rule
+    :param source_code: source to which apply the actions
+    :return: A updated source
+    """
 
-    def _initialize_rules(
-            self,
-            tree: ast.Module,
-            source: str,
-            file_info: _FileInfo,
-    ) -> list[Rule]:
-        context = Context._from_dependencies(
-            _resolve_dependencies(self.rules),
-            tree=tree,
-            source=source,
-            file_info=file_info,
-            config=self.config,
-        )
-        instances: list[Rule | RuleCollection] = []
-        for rule_or_collection in self.rules:
-            if issubclass(rule_or_collection, RuleCollection):
-                # We want to initialize the rules, but keep the rules grouped for intermediate tree update
-                (collection := rule_or_collection()).initialize_rules(context, file_info.path)
-                if collection.rule_instances and len(collection.rule_instances) > 0:
-                    instances.append(collection)
-            else:
-                instances.append(rule_or_collection(context))
-        return [i for i in instances if i.check_file(file_info.path)]
+    rule: Rule
+    action: BaseAction | Iterator[BaseAction]
+    source_code: str
+    optimization: bool = field(default=True)
 
-    def _apply_single(
-            self,
-            context: Context,
-            source_code: str,
-            action: BaseAction,
-            enable_optimizations: bool = True,
-    ) -> str:
-        if enable_optimizations:
-            action = optimize(action, context)
-        return action.apply(context, source_code)
+    _indent: str = field(default="")
 
-    def _apply_multiple(
-            self,
-            rule: Rule,
-            source_code: str,
-            actions: Iterator[BaseAction],
-    ) -> str:
-        # Compute the path of the current node (against the starting tree).
-        #
-        # Adjust this path with the knowledge from the previously applied
-        # actions.
-        #
-        # Use the path to find the correct node in the new tree.
+    def __post_init__(self):
+        if not isinstance(self.source_code, str) or not self.source_code:
+            raise TypeError("source_code must be a non-empty string")
+        if not self.action:
+            raise TypeError("action cannot be None")
+
+    def source(self) -> str:
+        """Compute the path of the current node (against the starting tree).
+
+        Adjust this path with the knowledge from the previously applied
+        actions.
+
+        Use the path to find the correct node in the new tree."""
 
         from refactor.internal.graph_access import AccessFailure, GraphPath
 
-        shifts: list[tuple[GraphPath, int]] = []
-        previous_tree = rule.context.tree
-        for action in actions:
+        shifts: List[Tuple[GraphPath, int]] = []
+        updated_source = self.source_code
+        previous_tree = self.rule.context.tree
+        for action in self.action:
             input_node, stack_effect = action.stack_effect()
 
             # We compute each path against the initial revision of the tree
             # since the rule who is producing them doesn't have access to the
             # temporary trees we generate on the fly.
-            path = GraphPath.backtrack_from(rule.context, input_node)
+            path = GraphPath.backtrack_from(self.rule.context, input_node)
 
             # And due to this, some actions might have altered the tree in a
             # way that makes the path as is invalid. For ensuring that the path
@@ -194,46 +241,134 @@ class Session:
             else:
                 shifts.append((path, stack_effect))
 
-            updated_action = action.replace_input(updated_input)
-            updated_context = rule.context.replace(
-                source=source_code, tree=previous_tree
-            )
+            updated_action: BaseAction = action.replace_input(updated_input)
+            updated_context: Context = self.rule.context.replace(source=updated_source, tree=previous_tree)
 
-            # TODO: re-enable optimizations if it is viable to run
-            # them on the new tree/source code.
-            source_code = self._apply_single(
-                updated_context,
-                source_code,
-                updated_action,
-                enable_optimizations=False,
-            )
+            # TODO: re-enable optimizations if it is viable to run them on the new tree/source code.
+            updated_source: str = _SourceFromAction(self.rule,
+                                                    updated_action,
+                                                    updated_source,
+                                                    context=updated_context,
+                                                    optimization=False,
+                                                    _indent="  " + self._indent,
+                                                    ).source()
+
             try:
-                previous_tree = ast.parse(source_code)
+                previous_tree = ast.parse(updated_source)
             except SyntaxError as exc:
-                return self._unparsable_source_code(source_code, exc)
-        return source_code
+                _unparsable_source_code(updated_source, exc)
+        return updated_source
 
-    def _run_collection(
-            self,
-            node,
-            source: str,
-            collection: RuleCollection,
-    ) -> str:
-        """Run the given collection of rules against the given node"""
-        with suppress(AssertionError):
-            for rule, match in collection.match(node):
-                if match is None:
-                    continue
-                if isinstance(match, BaseAction):
-                    new_source = self._apply_single(rule.context, source, match)
-                elif isinstance(match, Iterator):
-                    new_source = self._apply_multiple(rule, source, match)
-                else:
-                    raise TypeError(
-                        f"Unexpected action type: {type(match).__name__}"
-                    )
-                return new_source
+
+@dataclass(frozen=True)
+class _SourceFromAction(_SourceFromIterator):
+    """A match of a rule against a source file."""
+
+    context: Context = field(default_factory=Context)
+
+    def source(self, optimization: Optional[bool] = None) -> str:
+        """Apply a single action to the source"""
+        action: BaseAction = self.action
+        if optimization:
+            action = optimize(self.action, self.context)
+        source: str = action.apply(self.context, self.source_code)
         return source
+
+
+@dataclass(frozen=True)
+class _MatchFromRuleCollection:
+    rule_or_collection: Rule | RuleCollection
+
+    _indent: str = field(default="")
+
+    def match(
+            self,
+            node: ast.AST,
+    ) -> Generator[Tuple[Rule, BaseAction | None | Iterator[BaseAction]]]:
+        """Masquerades the 'match' of a Rule to return a tuple of (Rule, Action)."""
+        with suppress(AssertionError):
+            if isinstance(self.rule_or_collection, RuleCollection):
+                print(self._indent,
+                      f"[_MatchFromRuleCollection] Collection: {self.rule_or_collection.__class__.__name__}")
+                print_collection = dataclasses.replace(self.rule_or_collection, _indent="  " + self._indent)
+                #for r, a in print_collection.match(node):
+                #    print(self._indent, f"[_MatchFromRuleCollection]    Rule: {r.__class__.__name__}, Action: {a}")
+                #    yield r, a
+                yield from self.rule_or_collection.match(node)
+                print(self._indent, f"[_MatchFromRuleCollection] Next")
+            else:
+                print(self._indent, f"[_MatchFromRuleCollection] Rule: {self.rule_or_collection.__class__.__name__}")
+                yield self.rule_or_collection, self.rule_or_collection.match(node)
+
+
+@dataclass(frozen=True)
+class _SourceFromRuleOrCollection:
+    rule_or_collection: Rule | RuleCollection
+
+    _indent: str = field(default="")
+
+    def source(self, node, source) -> str:
+        """Mixes the method of creating the source update between BaseAction and Iterator[BaseAction]."""
+        new_source: str = source
+        print(self._indent, f"[_SourceFromRuleOrCollection] Collection: {self.rule_or_collection.__class__.__name__}")
+        for rule, action in _MatchFromRuleCollection(self.rule_or_collection, _indent="  " + self._indent).match(node):
+            print(self._indent, f"[_SourceFromRuleOrCollection]    Rule: {rule.__class__.__name__}")
+            if action is None:
+                continue
+            if isinstance(action, Iterator):
+                builder: _SourceFromIterator = _SourceFromIterator(rule, action, new_source,
+                                                                   _indent="  " + self._indent)
+                print(self._indent, f"[_SourceFromRuleOrCollection]       Iterator: {action}")
+            else:  # isinstance(action, BaseAction):
+                builder: _SourceFromAction = _SourceFromAction(rule, action, new_source, context=rule.context,
+                                                               _indent="  " + self._indent)
+                print(self._indent, f"[_SourceFromRuleOrCollection]       Action: {action}")
+
+            # We return if the source has changed, otherwise we continue to the next rule.
+            new_source: str = builder.source()
+            if new_source is not None and new_source != "":
+                print(self._indent, f"[_SourceFromRuleOrCollection]       -> Source")
+                yield new_source
+                print(self._indent, f"[_SourceFromRuleOrCollection]      Next Rule")
+            else:
+                print(self._indent, f"[_SourceFromRuleOrCollection]       Empty o.0?")
+                return source
+        return source
+
+
+@dataclass
+class Session:
+    """A refactoring session that consists of a set of rules and a configuration."""
+    c_current_config: ClassVar[Configuration]
+
+    rules: list[type[Rule] | RuleCollection] = field(default_factory=list)
+    config: Configuration = field(default_factory=Configuration)
+
+    def _initialize_rules(
+            self,
+            tree: ast.Module,
+            source: str,
+            file_info: _FileInfo,
+    ) -> list[Rule]:
+        """Initialize all the rules in the session. This is done by calling the ``initialize`` method on each rule. """
+        Session.c_current_config = self.config
+        context = Context._from_dependencies(
+            _resolve_dependencies(self.rules),  # type: ignore
+            tree=tree,
+            source=source,
+            file_info=file_info,
+            config=self.config,
+        )
+        instances: list[Rule | RuleCollection] = []
+        for rule_or_collection in self.rules:
+            if issubclass(rule_or_collection, RuleCollection):
+                # We want to initialize the rules, but keep the rules grouped for intermediate tree update
+                (collection := rule_or_collection()).initialize_rules(context, file_info.path)
+                if collection.rule_instances and len(collection.rule_instances) > 0:
+                    instances.append(collection)
+            else:
+                instances.append(rule_or_collection(context))
+        return [i for i in instances if i.check_file(file_info.path)]
 
     def _run(
             self,
@@ -242,14 +377,13 @@ class Session:
             *,
             _changed: bool = False,
             _known_sources: frozenset[str] = frozenset(),
-    ) -> tuple[str, bool]:
+    ) -> Tuple[str, bool]:
         try:
             tree = ast.parse(source)
         except SyntaxError as exc:
             if not _changed:
                 return source, _changed
-            else:
-                return self._unparsable_source_code(source, exc)
+            return _unparsable_source_code(source, exc)
 
         _known_sources |= {source}
         rules = self._initialize_rules(tree, source, file_info)
@@ -258,47 +392,14 @@ class Session:
             if not has_positions(type(node)):  # type: ignore
                 continue
 
-            for rule in rules:
-                with suppress(AssertionError):
-                    if isinstance(rule, RuleCollection):
-                        new_source = self._run_collection(
-                            node,
-                            source,
-                            rule,
-                        )
-                    else:
-                        match = rule.match(node)
-                        if match is None:
-                            continue
-                        elif isinstance(match, BaseAction):
-                            new_source = self._apply_single(rule.context, source, match)
-                        elif isinstance(match, Iterator):
-                            new_source = self._apply_multiple(rule, source, match)
-                        else:
-                            raise TypeError(
-                                f"Unexpected action type: {type(match).__name__}"
-                            )
-
+            for i, rule_or_collection in enumerate(rules):
+                print(f"\n[Session] {rule_or_collection.__class__.__name__}, {i + 1}/{len(rules)}")
+                for new_source in _SourceFromRuleOrCollection(rule_or_collection, _indent="  ").source(node, source):
+                    print(f"\n[Session]     Source")
                     if new_source not in _known_sources:
-                        return self._run(
-                            new_source,
-                            file_info,
-                            _changed=True,
-                            _known_sources=_known_sources,
-                        )
-
+                        print(f"\n[Session]      -> New source")
+                        return self._run(new_source, file_info, _changed=True, _known_sources=_known_sources)
         return source, _changed
-
-    def _unparsable_source_code(self, source: str, exc: SyntaxError) -> NoReturn:
-        error_message = "Generated source is unparsable."
-
-        if self.config.debug_mode:
-            fd, file_name = tempfile.mkstemp(prefix="refactor", text=True)
-            with open(fd, "w") as stream:
-                stream.write(source)
-            error_message += f"\nSee {file_name} for the generated source."
-
-        raise ValueError(error_message) from exc
 
     def run(self, source: str) -> str:
         """Apply all the rules from this session to the given ``source``
