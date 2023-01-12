@@ -217,7 +217,7 @@ class _SourceFromIterator:
         updated_source = self.source_code
         previous_tree = self.rule.context.tree
         for action in self.action:
-            input_node, stack_effect = action._stack_effect()
+            input_node, stack_effect = action.stack_effect()
 
             # We compute each path against the initial revision of the tree
             # since the rule who is producing them doesn't have access to the
@@ -244,7 +244,7 @@ class _SourceFromIterator:
             else:
                 shifts.append((path, stack_effect))
 
-            updated_action: BaseAction = action._replace_input(updated_input)
+            updated_action: BaseAction = action.replace_input(updated_input)
             updated_context: Context = self.rule.context.replace(source=updated_source, tree=previous_tree)
 
             # TODO: re-enable optimizations if it is viable to run them on the new tree/source code.
