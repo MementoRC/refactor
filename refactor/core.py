@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import ast
-import dataclasses
 import tempfile
 import tokenize
-from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from contextlib import suppress
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, astuple
 from pathlib import Path
-from typing import ClassVar, NoReturn, Tuple, Generator, Type, List, Dict, Optional, Protocol
+from typing import ClassVar, NoReturn, Tuple, Generator, Type, List, Dict, Optional
 
 # TODO: remove the deprecated aliases on 1.0.0
 from refactor.actions import (  # unimport:skip
@@ -40,6 +38,17 @@ def _unparsable_source_code(source: str, exc: SyntaxError) -> NoReturn:
         error_message += f"\nSee {file_name} for the generated source."
 
     raise ValueError(error_message) from exc
+
+
+def _match_from_rule_or_collection(
+        r_or_c: Rule | RuleCollection,
+        node: ast.AST
+) -> Generator[Tuple[Rule, BaseAction | Iterator[BaseAction]]]:
+    with suppress(AssertionError):
+        if isinstance(r_or_c, RuleCollection):
+            yield from r_or_c.match(node)
+        else:
+            yield r_or_c, r_or_c.match(node)
 
 
 class MaybeOverlappingActions(Exception):
@@ -84,11 +93,11 @@ class _IsIterable(type):
 
 @dataclass
 class RuleCollection(metaclass=_IsIterable):
-    """Collects a set of Rule to be used as a standalone Rule in the Session's Rules"""
+    """Collects a set of Type[Rule] and Type[RuleCollection] to be used as a groupable Rules
+    The idea is simply to allow cleaner complex Chained rules that may throw 'MaybeOverlap
+    when too large, yet allowing the Session to have a short set of 'Rule' and 'Collection'"""
     rule_instances: Dict[Type[Rule], Rule] = field(default_factory=dict)
     collection_instances: Dict[Type[RuleCollection], RuleCollection] = field(default_factory=dict)
-
-    _indent: str = field(default="")
 
     _validated: bool = field(default=False, repr=False)
     _initialized: bool = field(default=False, repr=False)
@@ -159,18 +168,14 @@ class RuleCollection(metaclass=_IsIterable):
 
         # We keep the order of 'rules'
         for rule_type in self.rules:
-            print(self._indent, "[RuleCollection] Rule:", rule_type)
             # Only initialized rules are in the rule_instances dict
             if rule_type in self.rule_instances.keys():
-                print(self._indent, "[RuleCollection]    Rule initialized")
                 # For the rules in the Collection, we need to suppress the AssertionError
                 # as it is not an error, it is just a failed match in the list of Rules
                 with suppress(AssertionError):
                     matched_action = self.rule_instances[rule_type].match(node)
                     rule = self.rule_instances[rule_type]
-                    print(self._indent, "[RuleCollection]    Pre yield:", rule.__class__.__name__, matched_action)
                     yield rule, matched_action
-                    print(self._indent, "[RuleCollection]    Post-Matched:", rule.__class__.__name__, matched_action)
             if rule_type in self.collection_instances.keys():
                 # If the rule is a RuleCollection, call its 'match' method - recursion?
                 yield from self.collection_instances[rule_type].match(node)
@@ -190,9 +195,7 @@ class _SourceFromIterator:
     rule: Rule
     action: BaseAction | Iterator[BaseAction]
     source_code: str
-    optimization: bool = field(default=True)
-
-    _indent: str = field(default="")
+    enable_optimizations: bool = field(default=True)
 
     def __post_init__(self):
         if not isinstance(self.source_code, str) or not self.source_code:
@@ -214,7 +217,7 @@ class _SourceFromIterator:
         updated_source = self.source_code
         previous_tree = self.rule.context.tree
         for action in self.action:
-            input_node, stack_effect = action.stack_effect()
+            input_node, stack_effect = action._stack_effect()
 
             # We compute each path against the initial revision of the tree
             # since the rule who is producing them doesn't have access to the
@@ -241,7 +244,7 @@ class _SourceFromIterator:
             else:
                 shifts.append((path, stack_effect))
 
-            updated_action: BaseAction = action.replace_input(updated_input)
+            updated_action: BaseAction = action._replace_input(updated_input)
             updated_context: Context = self.rule.context.replace(source=updated_source, tree=previous_tree)
 
             # TODO: re-enable optimizations if it is viable to run them on the new tree/source code.
@@ -249,8 +252,7 @@ class _SourceFromIterator:
                                                     updated_action,
                                                     updated_source,
                                                     context=updated_context,
-                                                    optimization=False,
-                                                    _indent="  " + self._indent,
+                                                    enable_optimizations=False,
                                                     ).source()
 
             try:
@@ -264,41 +266,21 @@ class _SourceFromIterator:
 class _SourceFromAction(_SourceFromIterator):
     """A match of a rule against a source file."""
 
-    context: Context = field(default_factory=Context)
+    context: Context = field(default=None)
 
-    def source(self, optimization: Optional[bool] = None) -> str:
+    def __post_init__(self):
+        if not isinstance(self.context, Context):
+            raise TypeError("context must be a Context instance")
+
+    def source(self) -> str:
         """Apply a single action to the source"""
-        action: BaseAction = self.action
-        if optimization:
+        if isinstance(action := self.action, Iterator):
+            return super().source()
+
+        if self.enable_optimizations:
             action = optimize(self.action, self.context)
         source: str = action.apply(self.context, self.source_code)
         return source
-
-
-@dataclass(frozen=True)
-class _MatchFromRuleCollection:
-    rule_or_collection: Rule | RuleCollection
-
-    _indent: str = field(default="")
-
-    def match(
-            self,
-            node: ast.AST,
-    ) -> Generator[Tuple[Rule, BaseAction | None | Iterator[BaseAction]]]:
-        """Masquerades the 'match' of a Rule to return a tuple of (Rule, Action)."""
-        with suppress(AssertionError):
-            if isinstance(self.rule_or_collection, RuleCollection):
-                print(self._indent,
-                      f"[_MatchFromRuleCollection] Collection: {self.rule_or_collection.__class__.__name__}")
-                print_collection = dataclasses.replace(self.rule_or_collection, _indent="  " + self._indent)
-                #for r, a in print_collection.match(node):
-                #    print(self._indent, f"[_MatchFromRuleCollection]    Rule: {r.__class__.__name__}, Action: {a}")
-                #    yield r, a
-                yield from self.rule_or_collection.match(node)
-                print(self._indent, f"[_MatchFromRuleCollection] Next")
-            else:
-                print(self._indent, f"[_MatchFromRuleCollection] Rule: {self.rule_or_collection.__class__.__name__}")
-                yield self.rule_or_collection, self.rule_or_collection.match(node)
 
 
 @dataclass(frozen=True)
@@ -310,28 +292,18 @@ class _SourceFromRuleOrCollection:
     def source(self, node, source) -> str:
         """Mixes the method of creating the source update between BaseAction and Iterator[BaseAction]."""
         new_source: str = source
-        print(self._indent, f"[_SourceFromRuleOrCollection] Collection: {self.rule_or_collection.__class__.__name__}")
-        for rule, action in _MatchFromRuleCollection(self.rule_or_collection, _indent="  " + self._indent).match(node):
-            print(self._indent, f"[_SourceFromRuleOrCollection]    Rule: {rule.__class__.__name__}")
+        for rule, action in _match_from_rule_or_collection(self.rule_or_collection, node):
             if action is None:
                 continue
-            if isinstance(action, Iterator):
-                builder: _SourceFromIterator = _SourceFromIterator(rule, action, new_source,
-                                                                   _indent="  " + self._indent)
-                print(self._indent, f"[_SourceFromRuleOrCollection]       Iterator: {action}")
-            else:  # isinstance(action, BaseAction):
-                builder: _SourceFromAction = _SourceFromAction(rule, action, new_source, context=rule.context,
-                                                               _indent="  " + self._indent)
-                print(self._indent, f"[_SourceFromRuleOrCollection]       Action: {action}")
+            builder: _SourceFromAction = _SourceFromAction(rule, action, new_source, context=rule.context)
 
-            # We return if the source has changed, otherwise we continue to the next rule.
-            new_source: str = builder.source()
+            with suppress(AssertionError):
+                new_source: str = builder.source()
+
+            # Yield if source has changed, otherwise we continue to the next rule.
             if new_source is not None and new_source != "":
-                print(self._indent, f"[_SourceFromRuleOrCollection]       -> Source")
                 yield new_source
-                print(self._indent, f"[_SourceFromRuleOrCollection]      Next Rule")
             else:
-                print(self._indent, f"[_SourceFromRuleOrCollection]       Empty o.0?")
                 return source
         return source
 
@@ -392,13 +364,18 @@ class Session:
             if not has_positions(type(node)):  # type: ignore
                 continue
 
-            for i, rule_or_collection in enumerate(rules):
-                print(f"\n[Session] {rule_or_collection.__class__.__name__}, {i + 1}/{len(rules)}")
-                for new_source in _SourceFromRuleOrCollection(rule_or_collection, _indent="  ").source(node, source):
-                    print(f"\n[Session]     Source")
+            for rule_or_collection in rules:
+                print(f"Running rule: {rule_or_collection.__class__.__name__}")
+                for new_source in _SourceFromRuleOrCollection(rule_or_collection).source(node, source):
+                    print(f"New source: {new_source not in _known_sources}")
                     if new_source not in _known_sources:
-                        print(f"\n[Session]      -> New source")
-                        return self._run(new_source, file_info, _changed=True, _known_sources=_known_sources)
+                        return self._run(
+                            new_source,
+                            file_info,
+                            _changed=True,
+                            _known_sources=_known_sources,
+                        )
+
         return source, _changed
 
     def run(self, source: str) -> str:
