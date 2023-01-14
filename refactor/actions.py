@@ -80,10 +80,6 @@ class _LazyActionMixin(Generic[K, T], BaseAction):
 
 class _ReplaceCodeSegmentAction(BaseAction):
     def apply(self, context: Context, source: str) -> str:
-        # The decorators are removed in the 'lines' but present in the 'context`
-        # This lead to the 'replacement' containing the decorators and the returned
-        # 'lines' to duplicate them. Proposed workaround is to add the decorators in
-        # the 'view', in case the '_resynthesize()' adds/modifies them
         lines = split_lines(source, encoding=context.file_info.get_encoding())
         (
             lineno,
@@ -181,6 +177,7 @@ class LazyInsertAfter(_LazyActionMixin[ast.stmt, ast.stmt]):
     .. note::
         This action requires both the `node` and the built target to be statements.
     """
+    separator: bool = field(kw_only=True, default=False)
 
     def apply(self, context: Context, source: str) -> str:
         lines = split_lines(source, encoding=context.file_info.get_encoding())
@@ -191,7 +188,7 @@ class LazyInsertAfter(_LazyActionMixin[ast.stmt, ast.stmt]):
             markers=(self.node.lineno - 1, self.node.col_offset, None),
         )
 
-        if hasattr(self, "separator") and self.separator:
+        if self.separator:
             # Adding extra separating line
             replacement.insert(0, lines._newline_type)
 
@@ -227,6 +224,7 @@ class LazyInsertBefore(_LazyActionMixin[ast.stmt, ast.stmt]):
     .. note::
         This action requires both the `node` and the built target to be statements.
     """
+    separator: bool = field(kw_only=True, default=False)
 
     def apply(self, context: Context, source: str) -> str:
         lines = split_lines(source, encoding=context.file_info.get_encoding())
@@ -238,7 +236,7 @@ class LazyInsertBefore(_LazyActionMixin[ast.stmt, ast.stmt]):
         )
         replacement[-1] += lines._newline_type
 
-        if hasattr(self, "separator") and self.separator:
+        if self.separator:
             # Adding extra separating line
             replacement.append(lines._newline_type)
 
@@ -277,7 +275,6 @@ class InsertAfter(LazyInsertAfter):
     """
 
     target: ast.stmt
-    separator: bool = False
 
     def build(self) -> ast.stmt:
         return self.target
@@ -293,7 +290,6 @@ class InsertBefore(LazyInsertBefore):
     """
 
     target: ast.stmt
-    separator: bool = False
 
     def build(self) -> ast.stmt:
         return self.target

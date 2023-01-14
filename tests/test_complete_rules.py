@@ -176,21 +176,6 @@ class ImportFinder(Representative):
 class AddNewImport(LazyInsertAfter):
     module: str
     names: list[str]
-    separator: bool = False
-
-    def build(self):
-        return ast.ImportFrom(
-            level=0,
-            module=self.module,
-            names=[ast.alias(name) for name in self.names],
-        )
-
-
-@dataclass
-class AddNewImportBefore(LazyInsertBefore):
-    module: str
-    names: list[str]
-    separator: bool = False
 
     def build(self):
         return ast.ImportFrom(

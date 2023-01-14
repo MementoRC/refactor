@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import ast
 import textwrap
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, cast
 
@@ -13,6 +12,7 @@ from refactor import Session, common
 from refactor.common import clone
 from refactor.actions import Erase, InvalidActionError, InsertAfter, Replace, InsertBefore, LazyInsertAfter, \
     LazyInsertBefore
+from refactor.actions import Erase, InvalidActionError, InsertAfter, Replace, InsertBefore, LazyInsertAfter, LazyInsertBefore
 from refactor.context import Context
 from refactor.core import Rule
 
@@ -53,8 +53,6 @@ INVALID_ERASES_TREE = ast.parse(INVALID_ERASES)
 
 @dataclass
 class BuildInsertAfterBottom(LazyInsertAfter):
-    separator: bool
-
     def build(self) -> ast.Await:
         await_st = ast.parse("await async_test()")
         return await_st
