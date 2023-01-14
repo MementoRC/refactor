@@ -2,17 +2,16 @@ from __future__ import annotations
 
 import ast
 import textwrap
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, cast
 
 import pytest
-from refactor.ast import DEFAULT_ENCODING
 
 from refactor import Session, common
+from refactor.actions import Erase, InvalidActionError, InsertAfter, Replace, InsertBefore, LazyInsertAfter
+from refactor.ast import DEFAULT_ENCODING
 from refactor.common import clone
-from refactor.actions import Erase, InvalidActionError, InsertAfter, Replace, InsertBefore, LazyInsertAfter, \
-    LazyInsertBefore
-from refactor.actions import Erase, InvalidActionError, InsertAfter, Replace, InsertBefore, LazyInsertAfter, LazyInsertBefore
 from refactor.context import Context
 from refactor.core import Rule
 
