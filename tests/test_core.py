@@ -3,6 +3,8 @@ from __future__ import annotations
 import ast
 import re
 import textwrap
+from dataclasses import dataclass
+from typing import ClassVar
 
 import pytest
 
@@ -15,6 +17,7 @@ from refactor.core import Rule, Session, RuleCollection
 fake_ctx = Context(source="<test>", tree=ast.AST())
 test_file = common._FileInfo()
 
+__all__ = ["PlusToMinusRule"]
 
 @pytest.mark.parametrize(
     "source, expected, target_func, replacement",
@@ -190,6 +193,25 @@ def test_session_simple(source, rules, expected):
     assert session.run(source) == expected
 
 
+@pytest.mark.parametrize(
+    "source, expected, rules",
+    [
+        ("1+1", "1 - 1", "PlusToMinusRule"),
+        ("1+1", "1+1", "Plus_MinusRule"),
+    ],
+)
+def test_session_simple_with_string(source, rules, expected):
+    if isinstance(rules, str):
+        rules = [rules]
+
+    source = textwrap.dedent(source)
+    expected = textwrap.dedent(expected)
+
+    session = Session(rules)
+    assert session.run(source) == expected
+
+
+@dataclass
 class CollectPlusToMinusMultToMinusRule(RuleCollection):
     rules = [PlusToMinusRule, MultToMinusRule, ]
 
@@ -208,6 +230,32 @@ class CollectMultToMinusPlusToMinusRule(RuleCollection):
     ]
 )
 def test_session_collection(source, rules, expected):
+    if isinstance(rules, type):
+        rules = [rules]
+
+    source = textwrap.dedent(source)
+    expected = textwrap.dedent(expected)
+
+    session = Session(rules)
+    assert session.run(source) == expected
+
+
+class CollectPlusToMinusMultToMinusRuleWithString(RuleCollection):
+    rules: ClassVar = ["PlusToMinusRule", MultToMinusRule, ]
+
+
+class CollectPlus_MinusMultToMinusRuleWithString(RuleCollection):
+    rules: ClassVar = ["Plus_MinusRule", MultToMinusRule, ]
+
+
+@pytest.mark.parametrize(
+    "source, expected, rules",
+    [
+        ("1+1*2", "1 - 1 - 2", CollectPlusToMinusMultToMinusRuleWithString),
+        ("1+1*2", "1+1 - 2", CollectPlus_MinusMultToMinusRuleWithString),
+    ]
+)
+def test_session_collection_with_string(source, rules, expected):
     if isinstance(rules, type):
         rules = [rules]
 

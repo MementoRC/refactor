@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import ast
+import importlib
+import inspect
+import sys
 import tempfile
 import tokenize
+import warnings
 from collections.abc import Iterator
 from contextlib import suppress
 from dataclasses import dataclass, field, astuple
 from pathlib import Path
-from typing import ClassVar, NoReturn, Tuple, Generator, Type, List, Dict, Optional
+from types import ModuleType
+from typing import ClassVar, NoReturn, Tuple, Generator, Type, List, Dict, Optional, Set, Callable
 
 # TODO: remove the deprecated aliases on 1.0.0
 from refactor.actions import (  # unimport:skip
@@ -18,7 +23,7 @@ from refactor.actions import (  # unimport:skip
     TargetedNewStatementAction,
 )
 from refactor.change import Change
-from refactor.common import _FileInfo, has_positions
+from refactor.common import _FileInfo, has_positions, pascal_to_snake
 from refactor.context import (
     Configuration,
     Context,
@@ -51,7 +56,54 @@ def _match_from_rule_or_collection(
             yield r_or_c, r_or_c.match(node)
 
 
+def _import_named_rules(rules: List[str | Type[Rule] | Type[RuleCollection]], module_set: Set[ModuleType] = None):
+    """Import Rule/RuleCollection defined by name in the rules attribute."""
+    if module_set is None:
+        module_set: Set[ModuleType] = {module for n in rules if not isinstance(n, str) if
+                                       (module := inspect.getmodule(n)) is not None}
+    else:
+        module_set = module_set.union(
+            {module for n in rules if not isinstance(n, str) if (module := inspect.getmodule(n)) is not None})
+
+    if not module_set:
+        raise InvalidNameOfRuleOrRuleCollection("No module found for the rules. At least one master class must exists")
+
+    is_rule_class: Callable = lambda n: issubclass(n, Rule) and n is not Rule
+    is_rule_collection_class: Callable = lambda n: issubclass(n, RuleCollection) and n is not RuleCollection
+    is_member: Callable = lambda n: inspect.isclass(n) and (is_rule_class(n) or is_rule_collection_class(n))
+
+    for rule in rules:
+        if isinstance(rule, str):
+            script_class: Type[Rule | RuleCollection | None] = None
+            for module in module_set:
+                script_class = next((member for member_name, member in inspect.getmembers(module)
+                                     if is_member(member) and member_name == rule), None)
+                break
+
+            if script_class is None:
+                _module: str = pascal_to_snake(rule)
+                rules.remove(rule)
+                raise InvalidNameOfRuleOrRuleCollection(
+                    f"Module for '{rule}' not found. Removed from the list of rules")
+
+            if issubclass(script_class, RuleCollection):
+                script_class.import_named_rules()
+                _import_named_rules(script_class.rules, module_set)
+
+            rules[rules.index(rule)] = script_class
+
+        elif issubclass(rule, RuleCollection):
+            # print(inspect.getmodule(rule))
+            # print(inspect.getmembers(inspect.getmodule(rule), inspect.isclass))
+            rule.import_named_rules()
+            _import_named_rules(rule.rules, module_set)
+
+
 class MaybeOverlappingActions(Exception):
+    pass
+
+
+class InvalidNameOfRuleOrRuleCollection(Exception):
     pass
 
 
@@ -96,11 +148,47 @@ class RuleCollection(metaclass=_IsIterable):
     """Collects a set of Type[Rule] and Type[RuleCollection] to be used as a groupable Rules
     The idea is simply to allow cleaner complex Chained rules that may throw 'MaybeOverlap
     when too large, yet allowing the Session to have a short set of 'Rule' and 'Collection'"""
+    rules: ClassVar[List[str | Type[Rule] | Type[RuleCollection]]]
+
     rule_instances: Dict[Type[Rule], Rule] = field(default_factory=dict)
     collection_instances: Dict[Type[RuleCollection], RuleCollection] = field(default_factory=dict)
 
     _validated: bool = field(default=False, repr=False)
     _initialized: bool = field(default=False, repr=False)
+
+    @classmethod
+    def import_named_rules(cls):
+        """Rudimentary search for classes defined by their name in the rules attribute."""
+        module = inspect.getmodule(cls)
+        path = Path(module.__file__)
+        subdirs = [d for d in path.parent.iterdir() if d.is_dir()]
+        print(subdirs)
+        for rule in cls.rules:
+            if isinstance(rule, str):
+                script_class: Type[Rule | RuleCollection | None] = None
+                for member_name, member in inspect.getmembers(module, inspect.isclass):
+                    if member_name == rule:
+                        script_class = member
+                        break
+
+                if script_class is None:
+                    _module: str = pascal_to_snake(rule)
+                    for subdir in subdirs:
+                        if (subdir / f"{_module}.py").exists():
+                            module = importlib.import_module(f"{module.__name__}.{_module}")
+                            for member_name, member in inspect.getmembers(module, inspect.isclass):
+                                if member_name == rule:
+                                    script_class = member
+                                    break
+                            break
+                if script_class is None:
+                    cls.rules.remove(rule)
+                    continue
+
+                if issubclass(script_class, RuleCollection):
+                    script_class.import_named_rules()
+
+                cls.rules[cls.rules.index(rule)] = script_class
 
     def _validate_collection(self) -> bool:
         """Check if the rules exists and are valid. Raise an error if not.
@@ -141,7 +229,6 @@ class RuleCollection(metaclass=_IsIterable):
             self._validate_collection()
 
         for rule in self.rules:
-            # If the rule is a Rule, initialize it
             if issubclass(rule, Rule) and (instance := rule(context)).check_file(path):
                 self.rule_instances[rule] = instance
 
@@ -313,8 +400,36 @@ class Session:
     """A refactoring session that consists of a set of rules and a configuration."""
     c_current_config: ClassVar[Configuration]
 
-    rules: list[type[Rule] | RuleCollection] = field(default_factory=list)
+    rules: list[str | type[Rule] | RuleCollection] = field(default_factory=list)
     config: Configuration = field(default_factory=Configuration)
+
+    def __post_init__(self):
+        # The frame for the session call will be up from __post_init__, __init__
+        self.calling_module = sys.modules[inspect.currentframe().f_back.f_back.f_globals["__name__"]]
+
+    def _import_named_rules(self):
+        """Import all rules from the given module."""
+        module = inspect.getmodule(self.calling_module)
+        is_rule_class: Callable = lambda n: issubclass(n, Rule) and n is not Rule
+        is_rule_collection_class: Callable = lambda n: issubclass(n, RuleCollection) and n is not RuleCollection
+        is_member: Callable = lambda n: inspect.isclass(n) and (is_rule_class(n) or is_rule_collection_class(n))
+
+        for i, rule in enumerate(self.rules):
+            if isinstance(rule, str):
+                script_class = next((member for member_name, member in inspect.getmembers(module)
+                                     if is_member(member) and member_name == rule), None)
+
+                if script_class is None:
+                    self.rules[i] = None
+                    continue
+
+                rule = script_class
+                self.rules[i] = rule
+
+            if issubclass(rule, RuleCollection):
+                rule.import_named_rules()
+
+        self.rules = [rule for rule in self.rules if rule is not None]
 
     def _initialize_rules(
             self,
@@ -324,6 +439,10 @@ class Session:
     ) -> list[Rule]:
         """Initialize all the rules in the session. This is done by calling the ``initialize`` method on each rule. """
         Session.c_current_config = self.config
+
+        # Rudimentary rule importer for string-defined rules
+        self._import_named_rules()
+
         context = Context._from_dependencies(
             _resolve_dependencies(self.rules),  # type: ignore
             tree=tree,
