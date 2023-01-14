@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import dataclasses
 import warnings
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
@@ -167,6 +168,11 @@ class LazyInsertAfter(_LazyActionMixin[ast.stmt, ast.stmt]):
     .. note::
         This action requires both the `node` and the built target to be statements.
     """
+    separator: bool = field(kw_only=True, default=0)
+
+    def __post_init__(self):
+        if not hasattr(self, "separator"):
+            self.separator = False
 
     def apply(self, context: Context, source: str) -> str:
         lines = split_lines(source, encoding=context.file_info.get_encoding())
@@ -177,7 +183,7 @@ class LazyInsertAfter(_LazyActionMixin[ast.stmt, ast.stmt]):
         replacement = split_lines(context.unparse(self.build()))
         replacement.apply_indentation(indentation, start_prefix=start_prefix)
 
-        if hasattr(self, "separator") and self.separator:
+        if self.separator:
             # Adding extra separating line
             replacement.insert(0, lines._newline_type)
 
@@ -213,6 +219,11 @@ class LazyInsertBefore(_LazyActionMixin[ast.stmt, ast.stmt]):
     .. note::
         This action requires both the `node` and the built target to be statements.
     """
+    separator: bool = field(kw_only=True, default=0)
+
+    def __post_init__(self):
+        if not hasattr(self, "separator"):
+            self.separator = False
 
     def apply(self, context: Context, source: str) -> str:
         lines = split_lines(source, encoding=context.file_info.get_encoding())
@@ -224,7 +235,7 @@ class LazyInsertBefore(_LazyActionMixin[ast.stmt, ast.stmt]):
         replacement.apply_indentation(indentation, start_prefix=start_prefix)
         replacement[-1] += lines._newline_type
 
-        if hasattr(self, "separator") and self.separator:
+        if self.separator:
             # Adding extra separating line
             replacement.append(lines._newline_type)
 
@@ -261,7 +272,6 @@ class InsertAfter(LazyInsertAfter):
     """
 
     target: ast.stmt
-    separator: bool = False
 
     def build(self) -> ast.stmt:
         return self.target
@@ -277,7 +287,6 @@ class InsertBefore(LazyInsertBefore):
     """
 
     target: ast.stmt
-    separator: bool = False
 
     def build(self) -> ast.stmt:
         return self.target

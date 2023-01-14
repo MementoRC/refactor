@@ -51,7 +51,6 @@ INVALID_ERASES_TREE = ast.parse(INVALID_ERASES)
 
 @dataclass
 class BuildInsertAfterBottom(LazyInsertAfter):
-    separator: bool
     def build(self) -> ast.Await:
         await_st = ast.parse("await async_test()")
         return await_st
