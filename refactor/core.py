@@ -10,6 +10,7 @@ import warnings
 from collections.abc import Iterator
 from contextlib import suppress
 from dataclasses import dataclass, field, astuple
+from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from types import ModuleType
 from typing import ClassVar, NoReturn, Tuple, Generator, Type, List, Dict, Optional, Set, Callable
@@ -93,8 +94,6 @@ def _import_named_rules(rules: List[str | Type[Rule] | Type[RuleCollection]], mo
             rules[rules.index(rule)] = script_class
 
         elif issubclass(rule, RuleCollection):
-            # print(inspect.getmodule(rule))
-            # print(inspect.getmembers(inspect.getmodule(rule), inspect.isclass))
             rule.import_named_rules()
             _import_named_rules(rule.rules, module_set)
 
@@ -104,6 +103,10 @@ class MaybeOverlappingActions(Exception):
 
 
 class InvalidNameOfRuleOrRuleCollection(Exception):
+    pass
+
+
+class FailedImportOfRuleORCollection(Exception):
     pass
 
 
@@ -157,38 +160,47 @@ class RuleCollection(metaclass=_IsIterable):
     _initialized: bool = field(default=False, repr=False)
 
     @classmethod
-    def import_named_rules(cls):
+    def import_named_rules(cls, indentation: str = ""):
         """Rudimentary search for classes defined by their name in the rules attribute."""
+
+        def class_from_namespace() -> Type[Rule | RuleCollection] | None:
+            return next((m for m_name, m in inspect.getmembers(module, inspect.isclass) if m_name == rule), None)
+
+        def class_from_package(package: str = "") -> Type[Rule | RuleCollection] | None:
+            module_name: str = pascal_to_snake(rule)
+            if (path.parent / f"{package}" / f"{module_name}.py").exists():
+                try:
+                    module = SourceFileLoader(module_name,
+                                              str(path.parent / f"{package}" / f"{module_name}.py")).load_module()
+                    return getattr(module, rule)
+                except ImportError:
+                    raise FailedImportOfRuleORCollection(
+                        f"Failed import of {module_name} from {package}. Check that this contains a valid Python code"
+                        f"\n\tModule for '{rule}' in {path.parent / f'{package}' / f'{module_name}.py'} not found")
+            else:
+                return None
+
+        def class_from_packages() -> Type[Rule | RuleCollection] | None:
+            for sub_dir in [d for d in path.parent.iterdir() if d.is_dir()]:
+                if (m := class_from_package(package=sub_dir.name)) is not None:
+                    return m
+            return None
+
         module = inspect.getmodule(cls)
         path = Path(module.__file__)
-        subdirs = [d for d in path.parent.iterdir() if d.is_dir()]
-        print(subdirs)
+
         for rule in cls.rules:
             if isinstance(rule, str):
-                script_class: Type[Rule | RuleCollection | None] = None
-                for member_name, member in inspect.getmembers(module, inspect.isclass):
-                    if member_name == rule:
-                        script_class = member
-                        break
+                if (rule_or_collection_class := class_from_namespace()) is None:
+                    if (rule_or_collection_class := class_from_package()) is None:
+                        if (rule_or_collection_class := class_from_packages()) is None:
+                            cls.rules.remove(rule)
+                            continue
 
-                if script_class is None:
-                    _module: str = pascal_to_snake(rule)
-                    for subdir in subdirs:
-                        if (subdir / f"{_module}.py").exists():
-                            module = importlib.import_module(f"{module.__name__}.{_module}")
-                            for member_name, member in inspect.getmembers(module, inspect.isclass):
-                                if member_name == rule:
-                                    script_class = member
-                                    break
-                            break
-                if script_class is None:
-                    cls.rules.remove(rule)
-                    continue
+                if issubclass(rule_or_collection_class, RuleCollection):
+                    rule_or_collection_class.import_named_rules(indentation=indentation + "   ")
 
-                if issubclass(script_class, RuleCollection):
-                    script_class.import_named_rules()
-
-                cls.rules[cls.rules.index(rule)] = script_class
+                cls.rules[cls.rules.index(rule)] = rule_or_collection_class
 
     def _validate_collection(self) -> bool:
         """Check if the rules exists and are valid. Raise an error if not.
@@ -207,7 +219,8 @@ class RuleCollection(metaclass=_IsIterable):
                     raise TypeError(f"RuleCollection.rules must contain only Rules or RuleCollections, not {rule}")
 
         # Remove duplicates
-        setattr(self, "rules", list(set(self.rules)))
+        rules: List[str | Type[Rule] | Type[RuleCollection]] = getattr(self, "rules", None)
+        setattr(self, "rules", [x for i, x in enumerate(rules) if x not in rules[:i]])
 
         # Process collections within this collection. This is different, the collections need
         # to be initialized with the context, but the rules do not.
@@ -303,6 +316,7 @@ class _SourceFromIterator:
         shifts: List[Tuple[GraphPath, int]] = []
         updated_source = self.source_code
         previous_tree = self.rule.context.tree
+        previous_action: BaseAction = None
         for action in self.action:
             input_node, stack_effect = action.stack_effect()
 
@@ -325,8 +339,13 @@ class _SourceFromIterator:
                 raise MaybeOverlappingActions(
                     "When using chained actions, individual actions should not"
                     " overlap with each other."
-                    f"\n   Action attempted: {action} for node: {ast.unparse(action.node)}"
+                    f"\n    Previous action: {previous_action}"
+                    f"\n   Action attempted: {action}"
+                    f"\n       Current Path: {GraphPath.backtrack_from(self.rule.context, input_node)}"
                     f"\n               Path: {path}"
+                    f"\n             Shifts: {shifts}"
+                    f"\n              Stack: {stack_effect}"
+                    f"\n             P Tree: {previous_tree}"
                 ) from None
             else:
                 shifts.append((path, stack_effect))
@@ -346,6 +365,7 @@ class _SourceFromIterator:
                 previous_tree = ast.parse(updated_source)
             except SyntaxError as exc:
                 _unparsable_source_code(updated_source, exc)
+            previous_action = action
         return updated_source
 
 
@@ -400,7 +420,7 @@ class Session:
     """A refactoring session that consists of a set of rules and a configuration."""
     c_current_config: ClassVar[Configuration]
 
-    rules: list[str | type[Rule] | RuleCollection] = field(default_factory=list)
+    rules: list[str | type[Rule] | type[RuleCollection]] = field(default_factory=list)
     config: Configuration = field(default_factory=Configuration)
 
     def __post_init__(self):
@@ -416,14 +436,14 @@ class Session:
 
         for i, rule in enumerate(self.rules):
             if isinstance(rule, str):
-                script_class = next((member for member_name, member in inspect.getmembers(module)
-                                     if is_member(member) and member_name == rule), None)
+                rule_or_collection_class = next((m for m_name, m in inspect.getmembers(module)
+                                                 if is_member(m) and m_name == rule), None)
 
-                if script_class is None:
+                if rule_or_collection_class is None:
                     self.rules[i] = None
                     continue
 
-                rule = script_class
+                rule = rule_or_collection_class
                 self.rules[i] = rule
 
             if issubclass(rule, RuleCollection):

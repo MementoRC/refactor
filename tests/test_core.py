@@ -4,6 +4,7 @@ import ast
 import re
 import textwrap
 from dataclasses import dataclass
+from importlib.machinery import SourceFileLoader
 from typing import ClassVar
 
 import pytest
@@ -322,6 +323,66 @@ def test_session_run_file(tmp_path):
 
     assert session.run_file(file_3) is None
     assert paths == {file_1, file_2}
+
+
+def test_session_run_file_collection(tmp_path):
+    paths = set()
+
+    init = tmp_path / "__init__.py"
+    with open(init, "w") as handle:
+        handle.write("\n")
+
+    file = tmp_path / "collect_string_collection.py"
+    with open(file, "w") as handle:
+        handle.write("from refactor.core import RuleCollection\n"
+                     "class CollectStringCollection(RuleCollection):\n"
+                     "    rules = [\"TestThis\", \"TestThat\"]\n")
+
+    module = SourceFileLoader("collect_string_collection",str(tmp_path) + "/collect_string_collection.py").load_module()
+    session = Session([module.CollectStringCollection])
+
+    file = tmp_path / "test_this.py"
+    with open(file, "w") as handle:
+        handle.write("import ast\n"
+                     "from refactor.core import Rule\n"
+                     "from refactor.actions import LazyReplace\n"
+                     "class SimpleAction(LazyReplace):\n"
+                     "    def build(self):\n"
+                     "        node = self.branch()\n"
+                     "        node.op = ast.Sub()\n"
+                     "        return node\n"
+                     "class TestThis(Rule):\n"
+                     "    def match(self, node):\n"
+                     "        print(node)\n"
+                     "        assert isinstance(node, ast.BinOp)\n"
+                     "        assert isinstance(node.op, ast.Add)\n"
+                     "        return SimpleAction(node)\n")
+
+    file = tmp_path / "test_that.py"
+    with open(file, "w") as handle:
+        handle.write("import ast\n"
+                     "from refactor.core import Rule\n"
+                     "from refactor.actions import LazyReplace\n"
+                     "class SimpleAction(LazyReplace):\n"
+                     "    def build(self):\n"
+                     "        node = self.branch()\n"
+                     "        node.op = ast.Sub()\n"
+                     "        return node\n"
+                     "class TestThat(Rule):\n"
+                     "    def match(self, node):\n"
+                     "        assert isinstance(node, ast.BinOp)\n"
+                     "        assert isinstance(node.op, ast.Mult)\n"
+                     "        return SimpleAction(node)\n")
+
+    test_file = tmp_path / "test.py"
+    with open(test_file, "w") as handle:
+        handle.write("1+1*1")
+
+    change = session.run_file(test_file)
+    assert change is not None
+    assert isinstance(change, Change)
+    assert change.original_source == "1+1*1"
+    assert change.refactored_source == "1 - 1 - 1"
 
 
 class MirrorAction(LazyReplace):

@@ -260,7 +260,7 @@ class NewStatementAction(LazyInsertAfter, _DeprecatedAliasMixin):
 
 
 @dataclass
-class NewStatementBeforeAction(LazyInsertBefore, _DeprecatedAliasMixin):
+class NewStatementBeforeAction(LazyInsertBefore):
     ...
 
 
@@ -301,7 +301,7 @@ class TargetedNewStatementAction(InsertAfter, _DeprecatedAliasMixin):
 
 
 @dataclass
-class TargetedNewStatementBeforeAction(InsertBefore, _DeprecatedAliasMixin):
+class TargetedNewStatementBeforeAction(InsertBefore):
     ...
 
 

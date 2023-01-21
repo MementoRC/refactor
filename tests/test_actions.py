@@ -50,6 +50,72 @@ with x as y:
 INVALID_ERASES_TREE = ast.parse(INVALID_ERASES)
 
 
+@pytest.mark.parametrize(
+    "invalid_node",
+    [node for node in ast.walk(INVALID_ERASES_TREE) if isinstance(node, ast.Assert)],
+)
+def test_erase_invalid(invalid_node):
+    context = Context(INVALID_ERASES, INVALID_ERASES_TREE)
+    with pytest.raises(InvalidActionError):
+        Erase(invalid_node).apply(context, INVALID_ERASES)
+
+
+VALID_ERASES = """
+def foo():
+    assert 1
+    assert 2
+
+if something:
+    assert 1
+    assert 2
+elif something:
+    assert 1
+    assert 2
+else:
+    assert 1
+    assert 2
+
+try:
+    assert 1
+    assert 2
+except Exception:
+    assert 1
+    assert 2
+else:
+    assert 1
+    assert 2
+
+for x in y:
+    assert 1
+    assert 2
+else:
+    assert 1
+    assert 2
+
+while True:
+    assert 1
+    assert 2
+else:
+    assert 1
+    assert 2
+
+with x as y:
+    assert 1
+    assert 2
+"""
+
+VALID_ERASES_TREE = ast.parse(VALID_ERASES)
+
+
+@pytest.mark.parametrize(
+    "valid_node",
+    [node for node in ast.walk(VALID_ERASES_TREE) if isinstance(node, ast.Assert)],
+)
+def test_erase_valid(valid_node):
+    context = Context(VALID_ERASES, VALID_ERASES_TREE)
+    Erase(valid_node).apply(context, VALID_ERASES)
+
+
 @dataclass
 class BuildInsertAfterBottom(LazyInsertAfter):
     def build(self) -> ast.Await:
@@ -59,11 +125,13 @@ class BuildInsertAfterBottom(LazyInsertAfter):
 
 class TestInsertBeforeDecoratedFunction(Rule):
     INPUT_SOURCE = """
+    class Foo:
         @decorate
         def decorated():
             test_this()"""
 
     EXPECTED_SOURCE = """
+    class Foo:
         await async_test()
         @decorate
         async def decorated():
@@ -643,16 +711,6 @@ class TestInsertAfterBeforeRepeat(Rule):
         for remaining_try in reversed(remaining_trys[:3]):
             yield InsertBefore(node, remaining_try)
             yield InsertAfter(node, remaining_try)
-
-
-@pytest.mark.parametrize(
-    "invalid_node",
-    [node for node in ast.walk(INVALID_ERASES_TREE) if isinstance(node, ast.Assert)],
-)
-def test_erase_invalid(invalid_node):
-    context = Context(INVALID_ERASES, INVALID_ERASES_TREE)
-    with pytest.raises(InvalidActionError):
-        Erase(invalid_node).apply(context, INVALID_ERASES)
 
 
 @pytest.mark.parametrize(
