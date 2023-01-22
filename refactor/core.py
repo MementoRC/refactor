@@ -162,21 +162,34 @@ class RuleCollection(metaclass=_IsIterable):
     @classmethod
     def import_named_rules(cls, indentation: str = ""):
         """Rudimentary search for classes defined by their name in the rules attribute."""
+        def path_to_package(pth: Path, pkg: str = "") -> Tuple[Path, str]:
+            while (pth.parent / "__init__.py").exists():
+                pkg = pth.with_suffix("").relative_to(pth.parent).as_posix() + ("." + pkg if pkg != "" else pkg)
+                pth = pth.parent
+            return pth.parent, pth.with_suffix("").relative_to(pth.parent).as_posix() + "." + pkg
 
         def class_from_namespace() -> Type[Rule | RuleCollection] | None:
             return next((m for m_name, m in inspect.getmembers(module, inspect.isclass) if m_name == rule), None)
 
         def class_from_package(package: str = "") -> Type[Rule | RuleCollection] | None:
             module_name: str = pascal_to_snake(rule)
-            if (path.parent / f"{package}" / f"{module_name}.py").exists():
+            full_path: Path = path.parent / f"{package}" / f"{module_name}.py"
+
+            if full_path.exists():
+                posix_path, package_name = path_to_package(full_path)
+                sys.path.insert(1, str(posix_path))
                 try:
-                    module = SourceFileLoader(module_name,
-                                              str(path.parent / f"{package}" / f"{module_name}.py")).load_module()
-                    return getattr(module, rule)
-                except ImportError:
+                    spec = importlib.util.spec_from_file_location(package_name, full_path)
+                    mod = importlib.util.module_from_spec(spec)
+                    sys.modules[package_name] = mod
+                    spec.loader.exec_module(mod)
+                    return getattr(mod, rule)
+                except ImportError as msg:
                     raise FailedImportOfRuleORCollection(
-                        f"Failed import of {module_name} from {package}. Check that this contains a valid Python code"
-                        f"\n\tModule for '{rule}' in {path.parent / f'{package}' / f'{module_name}.py'} not found")
+                        f"Failed import of {module_name} from dir:{package}."
+                        f"Check that this contains a valid Python code"
+                        f"\n\tModule for '{rule}' in '{str(full_path)}'"
+                        f"\n\tError: '{msg}'")
             else:
                 return None
 

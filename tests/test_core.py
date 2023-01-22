@@ -338,7 +338,7 @@ def test_session_run_file_collection(tmp_path):
                      "class CollectStringCollection(RuleCollection):\n"
                      "    rules = [\"TestThis\", \"TestThat\"]\n")
 
-    module = SourceFileLoader("collect_string_collection",str(tmp_path) + "/collect_string_collection.py").load_module()
+    module = SourceFileLoader("collect_string_collection", str(tmp_path) + "/collect_string_collection.py").load_module()
     session = Session([module.CollectStringCollection])
 
     file = tmp_path / "test_this.py"
@@ -346,6 +346,7 @@ def test_session_run_file_collection(tmp_path):
         handle.write("import ast\n"
                      "from refactor.core import Rule\n"
                      "from refactor.actions import LazyReplace\n"
+                     "from .test_that import TestThat\n"
                      "class SimpleAction(LazyReplace):\n"
                      "    def build(self):\n"
                      "        node = self.branch()\n"
