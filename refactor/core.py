@@ -57,47 +57,6 @@ def _match_from_rule_or_collection(
             yield r_or_c, r_or_c.match(node)
 
 
-def _import_named_rules(rules: List[str | Type[Rule] | Type[RuleCollection]], module_set: Set[ModuleType] = None):
-    """Import Rule/RuleCollection defined by name in the rules attribute."""
-    if module_set is None:
-        module_set: Set[ModuleType] = {module for n in rules if not isinstance(n, str) if
-                                       (module := inspect.getmodule(n)) is not None}
-    else:
-        module_set = module_set.union(
-            {module for n in rules if not isinstance(n, str) if (module := inspect.getmodule(n)) is not None})
-
-    if not module_set:
-        raise InvalidNameOfRuleOrRuleCollection("No module found for the rules. At least one master class must exists")
-
-    is_rule_class: Callable = lambda n: issubclass(n, Rule) and n is not Rule
-    is_rule_collection_class: Callable = lambda n: issubclass(n, RuleCollection) and n is not RuleCollection
-    is_member: Callable = lambda n: inspect.isclass(n) and (is_rule_class(n) or is_rule_collection_class(n))
-
-    for rule in rules:
-        if isinstance(rule, str):
-            script_class: Type[Rule | RuleCollection | None] = None
-            for module in module_set:
-                script_class = next((member for member_name, member in inspect.getmembers(module)
-                                     if is_member(member) and member_name == rule), None)
-                break
-
-            if script_class is None:
-                _module: str = pascal_to_snake(rule)
-                rules.remove(rule)
-                raise InvalidNameOfRuleOrRuleCollection(
-                    f"Module for '{rule}' not found. Removed from the list of rules")
-
-            if issubclass(script_class, RuleCollection):
-                script_class.import_named_rules()
-                _import_named_rules(script_class.rules, module_set)
-
-            rules[rules.index(rule)] = script_class
-
-        elif issubclass(rule, RuleCollection):
-            rule.import_named_rules()
-            _import_named_rules(rule.rules, module_set)
-
-
 class MaybeOverlappingActions(Exception):
     pass
 
@@ -237,13 +196,13 @@ class RuleCollection(metaclass=_IsIterable):
 
         # Process collections within this collection. This is different, the collections need
         # to be initialized with the context, but the rules do not.
-        for collection_type in self.rules:
+        for i, collection_type in enumerate(self.rules):
             if issubclass(collection_type, RuleCollection):
                 collection: RuleCollection = collection_type()
                 if collection._validate_collection():
                     self.collection_instances[collection_type] = collection
                 else:
-                    del self.rules[self.rules.index(collection_type)]
+                    self.rules[i] = None
         self._validated = True
 
         return self._validated
@@ -440,6 +399,9 @@ class Session:
         # The frame for the session call will be up from __post_init__, __init__
         self.calling_module = sys.modules[inspect.currentframe().f_back.f_back.f_globals["__name__"]]
 
+        # Rudimentary rule importer for string-defined rules
+        self._import_named_rules()
+
     def _import_named_rules(self):
         """Import all rules from the given module."""
         module = inspect.getmodule(self.calling_module)
@@ -472,9 +434,6 @@ class Session:
     ) -> list[Rule]:
         """Initialize all the rules in the session. This is done by calling the ``initialize`` method on each rule. """
         Session.c_current_config = self.config
-
-        # Rudimentary rule importer for string-defined rules
-        self._import_named_rules()
 
         context = Context._from_dependencies(
             _resolve_dependencies(self.rules),  # type: ignore

@@ -338,9 +338,6 @@ def test_session_run_file_collection(tmp_path):
                      "class CollectStringCollection(RuleCollection):\n"
                      "    rules = [\"TestThis\", \"TestThat\"]\n")
 
-    module = SourceFileLoader("collect_string_collection", str(tmp_path) + "/collect_string_collection.py").load_module()
-    session = Session([module.CollectStringCollection])
-
     file = tmp_path / "test_this.py"
     with open(file, "w") as handle:
         handle.write("import ast\n"
@@ -354,7 +351,6 @@ def test_session_run_file_collection(tmp_path):
                      "        return node\n"
                      "class TestThis(Rule):\n"
                      "    def match(self, node):\n"
-                     "        print(node)\n"
                      "        assert isinstance(node, ast.BinOp)\n"
                      "        assert isinstance(node.op, ast.Add)\n"
                      "        return SimpleAction(node)\n")
@@ -378,6 +374,9 @@ def test_session_run_file_collection(tmp_path):
     test_file = tmp_path / "test.py"
     with open(test_file, "w") as handle:
         handle.write("1+1*1")
+
+    module = SourceFileLoader("collect_string_collection", str(tmp_path) + "/collect_string_collection.py").load_module()
+    session = Session([module.CollectStringCollection])
 
     change = session.run_file(test_file)
     assert change is not None
