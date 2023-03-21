@@ -363,6 +363,7 @@ class Erase(_ReplaceCodeSegmentAction):
                 " block. Consider using the erase_or_replace function"
                 f" instead.\nTarget node: {self.node} @"
                 f" {context.file or '<string>'}:{self.node.lineno}"
+                f" \n\t{ast.unparse(self.node)}"
             )
         else:
             return ""

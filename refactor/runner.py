@@ -91,14 +91,14 @@ def run_files(
 
             stats["reformatted"] += 1
             if apply:
-                print(f"reformatted {change.file!s}")
+                #print(f"reformatted {change.file!s}")
                 change.apply_diff()
             else:
                 print(change.compute_diff())
 
-    print("All done!")
-    if message := dump_stats(stats):
-        print(message)
+    #print("All done!")
+    #if message := dump_stats(stats):
+    #    print(message)
 
     return stats["reformatted"] > 0
 

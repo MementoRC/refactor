@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import importlib
+import importlib.util
 import inspect
 import sys
 import tempfile
@@ -311,8 +312,8 @@ class _SourceFromIterator:
                 raise MaybeOverlappingActions(
                     "When using chained actions, individual actions should not"
                     " overlap with each other."
-                    f"\n    Previous action: {previous_action}"
-                    f"\n   Action attempted: {action}"
+                    f"\n    Previous action: {previous_action}: {ast.unparse(previous_action.node) if previous_action is not None else None}"
+                    f"\n   Action attempted: {action}: {ast.unparse(action.node)}"
                     f"\n       Current Path: {GraphPath.backtrack_from(self.rule.context, input_node)}"
                     f"\n               Path: {path}"
                     f"\n             Shifts: {shifts}"
