@@ -9,7 +9,8 @@ from typing import Iterator, cast
 import pytest
 
 from refactor import Session, common
-from refactor.actions import Erase, InvalidActionError, InsertAfter, Replace, InsertBefore, LazyInsertAfter
+from refactor.actions import Erase, InvalidActionError, InsertAfter, Replace, InsertBefore, LazyInsertAfter, \
+    LazyReplace, BaseAction
 from refactor.ast import DEFAULT_ENCODING
 from refactor.common import clone
 from refactor.context import Context
@@ -713,6 +714,51 @@ class TestInsertAfterBeforeRepeat(Rule):
             yield InsertAfter(node, remaining_try)
 
 
+class RemoveDecorators(LazyReplace):
+    def build(self) -> ast.AST:
+        new_function = self.branch()
+        new_function.decorator_list = []
+        return new_function
+
+
+class TestRemoveDecorators(Rule):
+    INPUT_SOURCE = """
+    class Foo:
+        @decorate
+        def decorated():
+            test_this()"""
+
+    EXPECTED_SOURCE = """
+    class Foo:
+        def decorated():
+            test_this()"""
+
+    def match(self, node: ast.AST) -> BaseAction:
+        assert isinstance(node, ast.FunctionDef)
+        return RemoveDecorators(node)
+
+
+class TestRemoveDecoratorsMultiLines(Rule):
+    INPUT_SOURCE = """
+    class Foo:
+        @decorate
+        def decorated():
+            test_this()
+            test_that()
+            test_the_other()"""
+
+    EXPECTED_SOURCE = """
+    class Foo:
+        def decorated():
+            test_this()
+            test_that()
+            test_the_other()"""
+
+    def match(self, node: ast.AST) -> BaseAction:
+        assert isinstance(node, ast.FunctionDef)
+        return RemoveDecorators(node)
+
+
 @pytest.mark.parametrize(
     "rule",
     [
@@ -729,6 +775,8 @@ class TestInsertAfterBeforeRepeat(Rule):
         TestInsertAfterThenBefore,
         TestInsertBeforeThenAfterBothReversed,
         TestInsertAfterBeforeRepeat,
+        TestRemoveDecorators,
+        TestRemoveDecoratorsMultiLines,
     ],
 )
 def test_rules(rule, tmp_path):

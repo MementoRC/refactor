@@ -9,7 +9,7 @@ from collections import UserList, UserString
 from collections.abc import Generator, Iterator
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
-from functools import cached_property
+from functools import cached_property, partial
 from typing import Any, ContextManager, Protocol, SupportsIndex, TypeVar, Union, cast, Tuple
 
 from refactor import common
@@ -45,13 +45,16 @@ class Lines(UserList[StringType]):
         :param markers: Indentation and prefix parameters. Tuple of (start line, col_offset, end_suffix | None)
         """
 
+        def closest(s: Tuple[int, SourceSegment], i: int = 0) -> int:
+            return abs(s[0] - i)
+
         indentation, start_prefix = find_indent(source_lines[markers[0]][:markers[1]])
         end_suffix = "" if markers[2] is None else source_lines[-1][markers[2]:]
 
         original_line: str | None
         for index, line in enumerate(self.data):
-            if index < len(source_lines):
-                original_line = source_lines[index]
+            if len(match_list := sorted([(i, s) for i, s in enumerate(source_lines) if s.startswith(line[:-1])], key=partial(closest, i=index))) > 0:
+                original_line = match_list[0][1]
             else:
                 original_line = None
 
