@@ -311,7 +311,8 @@ class ScopeInfo(common._Singleton):
             elif isinstance(node, (ast.Import, ast.ImportFrom)):
                 # import something
                 for alias in node.names:
-                    local_definitions[alias.name].append(node)
+                    # local_definitions[alias.name].append(node)
+                    local_definitions[(alias.asname or alias.name)].append(node)
             elif isinstance(node, (ast.With, ast.AsyncWith)):
                 # with x as (y, z): ...
                 for item in node.items:
