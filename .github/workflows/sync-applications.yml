@@ -1,0 +1,32 @@
+name: Sync Applications
+
+on:
+  push:
+    branches: [development]
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: "Merge development → applications"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout applications branch
+        uses: actions/checkout@v4
+        with:
+          ref: applications
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Merge development into applications
+        run: |
+          git fetch origin development
+          git merge origin/development --no-edit -m "chore: auto-sync from development"
+
+      - name: Push updated applications
+        run: git push origin applications
