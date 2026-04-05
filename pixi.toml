@@ -5,6 +5,8 @@ platforms = ["linux-64", "osx-64", "osx-arm64"]
 
 [feature.ci.dependencies]
 python = ">=3.10"
+pip = "*"
+setuptools = "*"
 ruff = ">=0.8.4"
 mypy = ">=1.14.0"
 pytest = ">=8.0.0"
