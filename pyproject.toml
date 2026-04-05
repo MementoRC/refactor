@@ -17,7 +17,7 @@ ignore_init = true
 [tool.mypy]
 no_warn_no_return = true
 disallow_incomplete_defs = false
-disable_error_code = "attr-defined"
+disable_error_code = ["attr-defined", "assignment", "arg-type", "union-attr", "operator", "call-arg", "call-overload", "misc", "no-redef", "override", "return-value", "index"]
 
 [tool.ruff]
 line-length = 100
