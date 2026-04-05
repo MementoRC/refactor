@@ -9,8 +9,16 @@ from typing import Iterator, cast
 import pytest
 
 from refactor import Session, common
-from refactor.actions import Erase, InvalidActionError, InsertAfter, Replace, InsertBefore, LazyInsertAfter, \
-    LazyReplace, BaseAction
+from refactor.actions import (
+    BaseAction,
+    Erase,
+    InsertAfter,
+    InsertBefore,
+    InvalidActionError,
+    LazyInsertAfter,
+    LazyReplace,
+    Replace,
+)
 from refactor.ast import DEFAULT_ENCODING
 from refactor.common import clone
 from refactor.context import Context

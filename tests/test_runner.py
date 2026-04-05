@@ -17,7 +17,6 @@ from refactor.runner import (
     unbound_main,
 )
 
-
 # ---------------------------------------------------------------------------
 # A trivial Rule subclass used by run_files / unbound_main tests
 # ---------------------------------------------------------------------------
@@ -158,9 +157,7 @@ def test_run_files_no_changes(tmp_path: Path) -> None:
     assert result == 0
 
 
-def test_run_files_with_changes_no_apply(
-    tmp_path: Path, capsys: pytest.CaptureFixture
-) -> None:
+def test_run_files_with_changes_no_apply(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     py_file = _write_foo_source(tmp_path)
     original_text = py_file.read_text()
     session = Session([RenameFoo])
@@ -213,9 +210,7 @@ def test_unbound_main_argv(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_run_files_verbose_output(
-    tmp_path: Path, capsys: pytest.CaptureFixture
-) -> None:
+def test_run_files_verbose_output(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     py_file = _write_foo_source(tmp_path)
     session = Session([RenameFoo])
 
@@ -227,9 +222,7 @@ def test_run_files_verbose_output(
     assert "All done!" in captured.out
 
 
-def test_run_files_no_verbose_output(
-    tmp_path: Path, capsys: pytest.CaptureFixture
-) -> None:
+def test_run_files_no_verbose_output(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     py_file = _write_foo_source(tmp_path)
     session = Session([RenameFoo])
 
@@ -241,9 +234,7 @@ def test_run_files_no_verbose_output(
     assert "All done!" not in captured.out
 
 
-def test_unbound_main_verbose_flag(
-    tmp_path: Path, capsys: pytest.CaptureFixture
-) -> None:
+def test_unbound_main_verbose_flag(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     py_file = _write_foo_source(tmp_path)
     session = Session([RenameFoo])
 

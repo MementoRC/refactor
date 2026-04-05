@@ -11,10 +11,7 @@ from refactor.context import Scope
 
 class RefactorAsserts(refactor.Rule):
     # Store normalized absolute paths for comparison
-    FILES = frozenset(
-        os.path.normcase(str(Path(f).resolve()))
-        for f in ["refactor/common.py"]
-    )
+    FILES = frozenset(os.path.normcase(str(Path(f).resolve())) for f in ["refactor/common.py"])
 
     def check_file(self, file: Path | None) -> bool:
         if file is None:
@@ -51,10 +48,7 @@ def _is_hinted_with(node: ast.AST, name: str) -> bool:
 
 
 class ProcessDeprecationHints(refactor.Rule):
-    FILES = frozenset(
-        os.path.normcase(str(Path(f).resolve()))
-        for f in ["refactor/actions.py"]
-    )
+    FILES = frozenset(os.path.normcase(str(Path(f).resolve())) for f in ["refactor/actions.py"])
     context_providers = (Scope,)
 
     def check_file(self, file: Path | None) -> bool:

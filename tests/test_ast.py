@@ -6,9 +6,9 @@ import tokenize
 
 import pytest
 
-from refactor import common, Context
+from refactor import Context, common
 from refactor.ast import BaseUnparser, PreciseUnparser, split_lines
-from refactor.common import position_for, clone
+from refactor.common import clone, position_for
 
 
 def test_split_lines():
@@ -70,7 +70,7 @@ def test_split_lines_with_encoding(case):
         else:
             start_line = lines[lineno][col_offset:]
             end_line = lines[end_lineno][:end_col_offset]
-            match = start_line + lines[lineno + 1: end_lineno].join() + end_line
+            match = start_line + lines[lineno + 1 : end_lineno].join() + end_line
 
         assert str(match) == ast.get_source_segment(case, node)
 
@@ -219,7 +219,7 @@ def test_precise_unparser_comments():
     )
 
     # This removes spaces in newlines: expected_src = textwrap.dedent(
-    expected_src="""\
+    expected_src = """\
 def foo():
     # indented but not connected comment
     
@@ -327,8 +327,7 @@ def foo():
 """
     )
 
-    expected_src = (
-        """\
+    expected_src = """\
 def foo():
     # indented but not connected comment
     
@@ -345,7 +344,6 @@ def foo():
     )
     # c
 """
-    )
 
     tree = ast.parse(source)
 

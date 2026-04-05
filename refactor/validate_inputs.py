@@ -25,6 +25,5 @@ def validate_main_inputs(options: Namespace) -> None:
         else:
             raise ValueError(
                 "Either provide a file using --refactor-file or ensure one of "
-                "these directories exist: "
-                + ", ".join(map(str, _DEFAULT_FILES))
+                "these directories exist: " + ", ".join(map(str, _DEFAULT_FILES))
             )

@@ -25,9 +25,7 @@ def test_negate():
     assert ast.unparse(source) == "not foo"
 
 
-@pytest.mark.parametrize(
-    "condition, expected_source", [(True, "foo"), (False, "not foo")]
-)
+@pytest.mark.parametrize("condition, expected_source", [(True, "foo"), (False, "not foo")])
 def test_apply_condition(condition, expected_source):
     source = ast.parse("foo")
     source.body[0].value = apply_condition(condition, source.body[0].value)

@@ -14,10 +14,9 @@ from refactor import BaseAction, Rule, Session, common, context
 from refactor.actions import (
     Erase,
     EraseOrReplace,
-    InsertBefore,
-    LazyInsertBefore,
     InsertAfter,
     LazyInsertAfter,
+    LazyInsertBefore,
     LazyReplace,
     Replace,
 )
@@ -448,8 +447,7 @@ class OnlyKeywordArgumentDefaultNotSetCheckRule(Rule):
             for stmt in node.body:
                 for identifier in ast.walk(stmt):
                     if not (
-                        isinstance(identifier, ast.Name)
-                        and isinstance(identifier.ctx, ast.Load)
+                        isinstance(identifier, ast.Name) and isinstance(identifier.ctx, ast.Load)
                     ):
                         continue
 
@@ -745,15 +743,9 @@ class RemoveDeadCode(Rule):
 class DownstreamAnalyzer(Representative):
     context_providers = (context.Scope,)
 
-    def iter_dependents(
-        self, name: str, source: ast.Import | ast.ImportFrom
-    ) -> Iterator[ast.Name]:
+    def iter_dependents(self, name: str, source: ast.Import | ast.ImportFrom) -> Iterator[ast.Name]:
         for node in ast.walk(self.context.tree):
-            if (
-                isinstance(node, ast.Name)
-                and isinstance(node.ctx, ast.Load)
-                and node.id == name
-            ):
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) and node.id == name:
                 node_scope = self.context.scope.resolve(node)
                 definitions = node_scope.get_definitions(name)
                 if any(definition is source for definition in definitions):
@@ -1109,7 +1101,11 @@ a
         # Prevent wrapping F-strings that are already wrapped in F()
         # Otherwise you get infinite F(F(F(F(...))))
         parent = self.context.ancestry.get_parent(node)
-        assert not (isinstance(parent, ast.Call) and isinstance(parent.func, ast.Name) and parent.func.id == 'F')
+        assert not (
+            isinstance(parent, ast.Call)
+            and isinstance(parent.func, ast.Name)
+            and parent.func.id == "F"
+        )
 
         return Replace(node, ast.Call(func=ast.Name(id="F"), args=[node], keywords=[]))
 

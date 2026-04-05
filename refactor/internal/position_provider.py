@@ -45,8 +45,7 @@ def infer_identifier_position(
     node: ast.AST,
     identifier_value: str,
     context: Context,
-) -> common.PositionType | None:
-    ...
+) -> common.PositionType | None: ...
 
 
 EXPECTED_KEYWORDS = {
@@ -77,9 +76,7 @@ def infer_definition_name(
         except (SyntaxError, tokenize.TokenError):
             return None
 
-    def _expect_token(
-        expected_type: int, expected_str: str
-    ) -> tokenize.TokenInfo | None:
+    def _expect_token(expected_type: int, expected_str: str) -> tokenize.TokenInfo | None:
         if (
             (next_token := _next_token())
             and next_token.exact_type == expected_type

@@ -5,8 +5,6 @@ import textwrap
 from collections.abc import Iterator
 from pathlib import Path
 
-import pytest
-
 import refactor
 from refactor import common
 from refactor.context import Context
@@ -32,9 +30,7 @@ def test_position_provider_for_definitions():
         for node in nodes:
             position = infer_identifier_position(node, node.name, context)
             assert position is not None
-            known_location = common._get_known_location_from_source(
-                context.source, position
-            )
+            known_location = common._get_known_location_from_source(context.source, position)
             assert known_location == node.name
 
 
