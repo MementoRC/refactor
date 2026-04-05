@@ -72,10 +72,7 @@ def run_files(
     executor: ContextManager[Any]
     if workers == 1 or NO_PROCESSING:
         if workers > 1:
-            print(
-                "WARNING: multiprocessing is not available, so using the"
-                " sequential execution"
-            )
+            print("WARNING: multiprocessing is not available, so using the sequential execution")
         executor = nullcontext()
         changes = (session.run_file(file) for file in files)
     else:
@@ -116,9 +113,7 @@ def unbound_main(session: Session, argv: list[str] | None = None) -> int:
 
     options = parser.parse_args(argv)
     session.config.debug_mode = options.enable_debug_mode
-    files = chain.from_iterable(
-        expand_paths(source_dest) for source_dest in options.src
-    )
+    files = chain.from_iterable(expand_paths(source_dest) for source_dest in options.src)
     return run_files(
         session,
         files,

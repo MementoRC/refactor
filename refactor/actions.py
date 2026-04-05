@@ -53,8 +53,7 @@ class BaseAction:
 class _DeprecatedAliasMixin:
     def __post_init__(self, *args, **kwargs):
         warnings.warn(
-            f"{type(self).__name__!r} is deprecated, use"
-            f" {type(self).__base__.__name__!r} instead",
+            f"{type(self).__name__!r} is deprecated, use {type(self).__base__.__name__!r} instead",
             DeprecationWarning,
             stacklevel=3,
         )
@@ -129,8 +128,8 @@ class LazyReplace(_ReplaceCodeSegmentAction, _LazyActionMixin[ast.AST, ast.AST])
     def _get_decorated_segment_span(self, context: Context) -> PositionType:
         lineno, col_offset, end_lineno, end_col_offset = position_for(self.node)
         # Add the decorators to the segment span to resolve an issue with def -> async def
-        if hasattr(self.node, "decorator_list") and len(getattr(self.node, "decorator_list")) > 0:
-            lineno, _, _, _ = position_for(getattr(self.node, "decorator_list")[0])
+        if hasattr(self.node, "decorator_list") and len(self.node.decorator_list) > 0:
+            lineno, _, _, _ = position_for(self.node.decorator_list[0])
         return lineno, col_offset, end_lineno, end_col_offset
 
     def _resynthesize(self, context: Context) -> str:
@@ -143,8 +142,7 @@ class LazyReplace(_ReplaceCodeSegmentAction, _LazyActionMixin[ast.AST, ast.AST])
 
 
 @dataclass
-class Action(LazyReplace, _DeprecatedAliasMixin):
-    ...
+class Action(LazyReplace, _DeprecatedAliasMixin): ...
 
 
 @_hint("deprecated_alias", "ReplacementAction")
@@ -160,8 +158,7 @@ class Replace(LazyReplace):
 
 
 @dataclass
-class ReplacementAction(Replace, _DeprecatedAliasMixin):
-    ...
+class ReplacementAction(Replace, _DeprecatedAliasMixin): ...
 
 
 @_hint("deprecated_alias", "NewStatementAction")
@@ -177,6 +174,7 @@ class LazyInsertAfter(_LazyActionMixin[ast.stmt, ast.stmt]):
     .. note::
         This action requires both the `node` and the built target to be statements.
     """
+
     separator: bool = field(kw_only=True, default=False)
 
     def apply(self, context: Context, source: str) -> str:
@@ -224,6 +222,7 @@ class LazyInsertBefore(_LazyActionMixin[ast.stmt, ast.stmt]):
     .. note::
         This action requires both the `node` and the built target to be statements.
     """
+
     separator: bool = field(kw_only=True, default=False)
 
     def apply(self, context: Context, source: str) -> str:
@@ -241,8 +240,8 @@ class LazyInsertBefore(_LazyActionMixin[ast.stmt, ast.stmt]):
             replacement.append(lines._newline_type)
 
         original_node_start = cast(int, self.node.lineno)
-        if hasattr(self.node, "decorator_list") and len(getattr(self.node, "decorator_list")) > 0:
-            original_node_start, _, _, _ = position_for(getattr(self.node, "decorator_list")[0])
+        if hasattr(self.node, "decorator_list") and len(self.node.decorator_list) > 0:
+            original_node_start, _, _, _ = position_for(self.node.decorator_list[0])
         for line in reversed(replacement):
             lines.insert(original_node_start - 1, line)
 
@@ -255,13 +254,11 @@ class LazyInsertBefore(_LazyActionMixin[ast.stmt, ast.stmt]):
 
 
 @dataclass
-class NewStatementAction(LazyInsertAfter, _DeprecatedAliasMixin):
-    ...
+class NewStatementAction(LazyInsertAfter, _DeprecatedAliasMixin): ...
 
 
 @dataclass
-class NewStatementBeforeAction(LazyInsertBefore):
-    ...
+class NewStatementBeforeAction(LazyInsertBefore): ...
 
 
 @_hint("deprecated_alias", "TargetedNewStatementAction")
@@ -296,13 +293,11 @@ class InsertBefore(LazyInsertBefore):
 
 
 @dataclass
-class TargetedNewStatementAction(InsertAfter, _DeprecatedAliasMixin):
-    ...
+class TargetedNewStatementAction(InsertAfter, _DeprecatedAliasMixin): ...
 
 
 @dataclass
-class TargetedNewStatementBeforeAction(InsertBefore):
-    ...
+class TargetedNewStatementBeforeAction(InsertBefore): ...
 
 
 @dataclass
@@ -342,7 +337,9 @@ class Erase(_ReplaceCodeSegmentAction):
                 raise RuntimeError(f"Couldn't find the parent of {self.node}.")
 
         parent_field_value = getattr(parent_node, parent_field)
-        is_last_element: bool = isinstance(parent_field_value, list) and len(parent_field_value) == 1
+        is_last_element: bool = (
+            isinstance(parent_field_value, list) and len(parent_field_value) == 1
+        )
         is_not_exception: bool = parent_field not in ("decorator_list",)
         return is_last_element and is_not_exception
 
@@ -352,8 +349,8 @@ class Erase(_ReplaceCodeSegmentAction):
     def _get_decorated_segment_span(self, context: Context) -> PositionType:
         lineno, col_offset, end_lineno, end_col_offset = position_for(self.node)
         # Add the decorators to the segment span to resolve an issue with def -> async def
-        if hasattr(self.node, "decorator_list") and len(getattr(self.node, "decorator_list")) > 0:
-            lineno, _, _, _ = position_for(getattr(self.node, "decorator_list")[0])
+        if hasattr(self.node, "decorator_list") and len(self.node.decorator_list) > 0:
+            lineno, _, _, _ = position_for(self.node.decorator_list[0])
         return lineno, col_offset, end_lineno, end_col_offset
 
     def _resynthesize(self, context: Context) -> str:

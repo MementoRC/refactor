@@ -17,6 +17,7 @@ def _make_context(source: str) -> Context:
 # rename_optimizer – should fire and return _Rename
 # ---------------------------------------------------------------------------
 
+
 def test_rename_optimizer_function():
     source = textwrap.dedent("""\
         def old_name():
@@ -96,6 +97,7 @@ def test_rename_optimizer_async_function():
 # optimize – non-Replace actions pass through unchanged
 # ---------------------------------------------------------------------------
 
+
 def test_optimize_passthrough_non_replace():
     source = textwrap.dedent("""\
         x = 1
@@ -115,6 +117,7 @@ def test_optimize_passthrough_non_replace():
 # optimize – Replace on non-named nodes passes through unchanged
 # ---------------------------------------------------------------------------
 
+
 def test_optimize_passthrough_non_named_node():
     source = "x = 1"
     tree = ast.parse(source)
@@ -133,6 +136,7 @@ def test_optimize_passthrough_non_named_node():
 # ---------------------------------------------------------------------------
 # optimize – Replace that changes body (not just name) passes through
 # ---------------------------------------------------------------------------
+
 
 def test_optimize_passthrough_body_change():
     source = textwrap.dedent("""\
@@ -163,6 +167,7 @@ def test_optimize_passthrough_body_change():
 # ---------------------------------------------------------------------------
 # optimize – Replace with multiple field changes passes through unchanged
 # ---------------------------------------------------------------------------
+
 
 def test_optimize_multiple_changes():
     source = textwrap.dedent("""\

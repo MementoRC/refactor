@@ -3,7 +3,7 @@
 import ast
 import textwrap
 
-from refactor.context import Scope, _resolve_dependencies, Configuration, Context
+from refactor.context import Configuration, Context, Scope, _resolve_dependencies
 
 
 def get_context(source, *representatives, **kwargs):

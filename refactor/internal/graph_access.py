@@ -88,16 +88,13 @@ class GraphPath:
         for ancestor_field, ancestor in context.ancestry.traverse(node):
             ancestor_field_value = getattr(ancestor, ancestor_field)
             if isinstance(ancestor_field_value, list):
-                parts.append(
-                    IndexAccess(type(cursor), ancestor_field_value.index(cursor))
-                )
+                parts.append(IndexAccess(type(cursor), ancestor_field_value.index(cursor)))
                 parts.append(FieldAccess(list, ancestor_field))
             elif isinstance(ancestor_field_value, ast.AST):
                 parts.append(FieldAccess(type(cursor), ancestor_field))
             else:
                 raise TypeError(
-                    "Unexpeced ancestor field type:"
-                    f" {type(ancestor_field_value).__name__}"
+                    f"Unexpeced ancestor field type: {type(ancestor_field_value).__name__}"
                 )
 
             cursor = ancestor

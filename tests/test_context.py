@@ -176,9 +176,7 @@ def test_scope_definitions():
 
     accessors = [node for node in ast.walk(tree) if ast.unparse(node) == "accessor()"]
 
-    scopes = {
-        scope_info.name: scope_info for scope_info in map(scope.resolve, accessors)
-    }
+    scopes = {scope_info.name: scope_info for scope_info in map(scope.resolve, accessors)}
 
     assert scopes.keys() == {
         "<global>",

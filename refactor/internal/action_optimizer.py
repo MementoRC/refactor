@@ -16,13 +16,11 @@ from refactor.internal.ast_delta import (
 )
 from refactor.internal.position_provider import infer_identifier_position
 
-OptimizerType = Callable[[BaseAction, Context], Optional[BaseAction]]
+OptimizerType = Callable[[BaseAction, Context], BaseAction | None]
 
 _OPTIMIZATIONS: list[OptimizerType] = []
 
-is_named_node = common._type_checker(
-    ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef
-)
+is_named_node = common._type_checker(ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
 def register_optimizer(func: OptimizerType) -> OptimizerType:

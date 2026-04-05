@@ -11,11 +11,11 @@ import tokenize
 import warnings
 from collections.abc import Iterator
 from contextlib import suppress
-from dataclasses import dataclass, field, astuple
+from dataclasses import astuple, dataclass, field
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from types import ModuleType
-from typing import ClassVar, NoReturn, Tuple, Generator, Type, List, Dict, Optional, Set, Callable
+from typing import Callable, ClassVar, Dict, Generator, List, NoReturn, Optional, Set, Tuple, Type
 
 # TODO: remove the deprecated aliases on 1.0.0
 from refactor.actions import (  # unimport:skip
@@ -51,8 +51,7 @@ def _unparsable_source_code(source: str, exc: SyntaxError) -> NoReturn:
 
 
 def _match_from_rule_or_collection(
-        r_or_c: Rule | RuleCollection,
-        node: ast.AST
+    r_or_c: Rule | RuleCollection, node: ast.AST
 ) -> Generator[Tuple[Rule, BaseAction | Iterator[BaseAction]]]:
     with suppress(AssertionError):
         if isinstance(r_or_c, RuleCollection):
@@ -89,8 +88,8 @@ class Rule:
         return True
 
     def match(
-            self,
-            node: ast.AST,
+        self,
+        node: ast.AST,
     ) -> BaseAction | None | Iterator[BaseAction]:
         """Match the given ``node`` against current rule's scope.
 
@@ -103,6 +102,7 @@ class Rule:
 
 class _IsIterable(type):
     """Makes the class iterable in the sense of dependencies."""
+
     context_providers: ClassVar[Tuple[Type[Representative], ...]] = ()
 
     def __iter__(self) -> Iterator[RuleCollection]:
@@ -114,6 +114,7 @@ class RuleCollection(metaclass=_IsIterable):
     """Collects a set of Type[Rule] and Type[RuleCollection] to be used as a groupable Rules
     The idea is simply to allow cleaner complex Chained rules that may throw 'MaybeOverlap
     when too large, yet allowing the Session to have a short set of 'Rule' and 'Collection'"""
+
     rules: ClassVar[List[str | Type[Rule] | Type[RuleCollection]]]
 
     rule_instances: Dict[Type[Rule], Rule] = field(default_factory=dict)
@@ -125,14 +126,20 @@ class RuleCollection(metaclass=_IsIterable):
     @classmethod
     def import_named_rules(cls, indentation: str = ""):
         """Rudimentary search for classes defined by their name in the rules attribute."""
+
         def path_to_package(pth: Path, pkg: str = "") -> Tuple[Path, str]:
             while (pth.parent / "__init__.py").exists():
-                pkg = pth.with_suffix("").relative_to(pth.parent).as_posix() + ("." + pkg if pkg != "" else pkg)
+                pkg = pth.with_suffix("").relative_to(pth.parent).as_posix() + (
+                    "." + pkg if pkg != "" else pkg
+                )
                 pth = pth.parent
             return pth.parent, pth.with_suffix("").relative_to(pth.parent).as_posix() + "." + pkg
 
         def class_from_namespace() -> Type[Rule | RuleCollection] | None:
-            return next((m for m_name, m in inspect.getmembers(module, inspect.isclass) if m_name == rule), None)
+            return next(
+                (m for m_name, m in inspect.getmembers(module, inspect.isclass) if m_name == rule),
+                None,
+            )
 
         def class_from_package(package: str = "") -> Type[Rule | RuleCollection] | None:
             module_name: str = pascal_to_snake(rule)
@@ -152,7 +159,8 @@ class RuleCollection(metaclass=_IsIterable):
                         f"Failed import of {module_name} from dir:{package}."
                         f"Check that this contains a valid Python code"
                         f"\n\tModule for '{rule}' in '{str(full_path)}'"
-                        f"\n\tError: '{msg}'")
+                        f"\n\tError: '{msg}'"
+                    )
             else:
                 return None
 
@@ -192,11 +200,13 @@ class RuleCollection(metaclass=_IsIterable):
         if not all(issubclass(rule, (Rule, RuleCollection)) for rule in self.rules):
             for rule in self.rules:
                 if not issubclass(rule, (Rule, RuleCollection)):
-                    raise TypeError(f"RuleCollection.rules must contain only Rules or RuleCollections, not {rule}")
+                    raise TypeError(
+                        f"RuleCollection.rules must contain only Rules or RuleCollections, not {rule}"
+                    )
 
         # Remove duplicates
         rules: List[str | Type[Rule] | Type[RuleCollection]] = getattr(self, "rules", None)
-        setattr(self, "rules", [x for i, x in enumerate(rules) if x not in rules[:i]])
+        self.rules = [x for i, x in enumerate(rules) if x not in rules[:i]]
 
         # Process collections within this collection. This is different, the collections need
         # to be initialized with the context, but the rules do not.
@@ -231,7 +241,9 @@ class RuleCollection(metaclass=_IsIterable):
         """This should always be True, as it is only called on the top level RuleCollection"""
         return self._initialized
 
-    def match(self, node: ast.AST) -> Generator[Tuple[Rule, BaseAction | None | Iterator[BaseAction]]]:
+    def match(
+        self, node: ast.AST
+    ) -> Generator[Tuple[Rule, BaseAction | None | Iterator[BaseAction]]]:
         """Match the given ``node`` against all the rules in the collection.
 
         It yields tuples of all the Rule, BaseAction that match.
@@ -327,15 +339,18 @@ class _SourceFromIterator:
                 shifts.append((path, stack_effect))
 
             updated_action: BaseAction = action.replace_input(updated_input)
-            updated_context: Context = self.rule.context.replace(source=updated_source, tree=previous_tree)
+            updated_context: Context = self.rule.context.replace(
+                source=updated_source, tree=previous_tree
+            )
 
             # TODO: re-enable optimizations if it is viable to run them on the new tree/source code.
-            updated_source: str = _SourceFromAction(self.rule,
-                                                    updated_action,
-                                                    updated_source,
-                                                    context=updated_context,
-                                                    enable_optimizations=False,
-                                                    ).source()
+            updated_source: str = _SourceFromAction(
+                self.rule,
+                updated_action,
+                updated_source,
+                context=updated_context,
+                enable_optimizations=False,
+            ).source()
 
             try:
                 previous_tree = ast.parse(updated_source)
@@ -378,7 +393,9 @@ class _SourceFromRuleOrCollection:
         for rule, action in _match_from_rule_or_collection(self.rule_or_collection, node):
             if action is None:
                 continue
-            builder: _SourceFromAction = _SourceFromAction(rule, action, new_source, context=rule.context)
+            builder: _SourceFromAction = _SourceFromAction(
+                rule, action, new_source, context=rule.context
+            )
 
             with suppress(AssertionError):
                 new_source: str = builder.source()
@@ -400,7 +417,9 @@ class Session:
 
     def __post_init__(self):
         # The frame for the session call will be up from __post_init__, __init__
-        self.calling_module = sys.modules[inspect.currentframe().f_back.f_back.f_globals["__name__"]]
+        self.calling_module = sys.modules[
+            inspect.currentframe().f_back.f_back.f_globals["__name__"]
+        ]
 
         # Rudimentary rule importer for string-defined rules
         self._import_named_rules()
@@ -409,13 +428,23 @@ class Session:
         """Import all rules from the given module."""
         module = inspect.getmodule(self.calling_module)
         is_rule_class: Callable = lambda n: issubclass(n, Rule) and n is not Rule
-        is_rule_collection_class: Callable = lambda n: issubclass(n, RuleCollection) and n is not RuleCollection
-        is_member: Callable = lambda n: inspect.isclass(n) and (is_rule_class(n) or is_rule_collection_class(n))
+        is_rule_collection_class: Callable = lambda n: (
+            issubclass(n, RuleCollection) and n is not RuleCollection
+        )
+        is_member: Callable = lambda n: (
+            inspect.isclass(n) and (is_rule_class(n) or is_rule_collection_class(n))
+        )
 
         for i, rule in enumerate(self.rules):
             if isinstance(rule, str):
-                rule_or_collection_class = next((m for m_name, m in inspect.getmembers(module)
-                                                 if is_member(m) and m_name == rule), None)
+                rule_or_collection_class = next(
+                    (
+                        m
+                        for m_name, m in inspect.getmembers(module)
+                        if is_member(m) and m_name == rule
+                    ),
+                    None,
+                )
 
                 if rule_or_collection_class is None:
                     self.rules[i] = None
@@ -430,12 +459,12 @@ class Session:
         self.rules = [rule for rule in self.rules if rule is not None]
 
     def _initialize_rules(
-            self,
-            tree: ast.Module,
-            source: str,
-            file_info: _FileInfo,
+        self,
+        tree: ast.Module,
+        source: str,
+        file_info: _FileInfo,
     ) -> list[Rule]:
-        """Initialize all the rules in the session. This is done by calling the ``initialize`` method on each rule. """
+        """Initialize all the rules in the session. This is done by calling the ``initialize`` method on each rule."""
         _thread_local.current_config = self.config
 
         context = Context._from_dependencies(
@@ -457,12 +486,12 @@ class Session:
         return [i for i in instances if i.check_file(file_info.path)]
 
     def _run(
-            self,
-            source: str,
-            file_info: _FileInfo,
-            *,
-            _changed: bool = False,
-            _known_sources: frozenset[str] = frozenset(),
+        self,
+        source: str,
+        file_info: _FileInfo,
+        *,
+        _changed: bool = False,
+        _known_sources: frozenset[str] = frozenset(),
     ) -> Tuple[str, bool]:
         try:
             tree = ast.parse(source)
@@ -479,7 +508,9 @@ class Session:
                 continue
 
             for rule_or_collection in rules:
-                for new_source in _SourceFromRuleOrCollection(rule_or_collection).source(node, source):
+                for new_source in _SourceFromRuleOrCollection(rule_or_collection).source(
+                    node, source
+                ):
                     if new_source not in _known_sources:
                         return self._run(
                             new_source,

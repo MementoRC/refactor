@@ -44,9 +44,7 @@ def main() -> int:
     validate_main_inputs(options)
 
     session = Session(list(get_refactors(options.refactor_file)))
-    files = chain.from_iterable(
-        expand_paths(source_dest) for source_dest in options.src
-    )
+    files = chain.from_iterable(expand_paths(source_dest) for source_dest in options.src)
     return run_files(session, files, apply=options.dont_apply, workers=1)
 
 

@@ -13,33 +13,34 @@ from refactor import common
 from refactor.actions import InsertAfter, LazyReplace, Replace
 from refactor.change import Change
 from refactor.context import Configuration, Context, Representative
-from refactor.core import Rule, Session, RuleCollection
+from refactor.core import Rule, RuleCollection, Session
 
 fake_ctx = Context(source="<test>", tree=ast.AST())
 test_file = common._FileInfo()
 
 __all__ = ["PlusToMinusRule"]
 
+
 @pytest.mark.parametrize(
     "source, expected, target_func, replacement",
     [
         (
-                "2 + 2 == 4",
-                "2 + 2 == 5",
-                lambda mod: mod.body[0].value.comparators[0],
-                ast.Constant(5),
+            "2 + 2 == 4",
+            "2 + 2 == 5",
+            lambda mod: mod.body[0].value.comparators[0],
+            ast.Constant(5),
         ),
         (
-                "2       + 2 == 4",
-                "2       + 2 == 5",
-                lambda mod: mod.body[0].value.comparators[0],
-                ast.Constant(5),
+            "2       + 2 == 4",
+            "2       + 2 == 5",
+            lambda mod: mod.body[0].value.comparators[0],
+            ast.Constant(5),
         ),
         (
-                "2 + 2 == 4 # :)",
-                "2 + 2 == 5 # :)",
-                lambda mod: mod.body[0].value.comparators[0],
-                ast.Constant(5),
+            "2 + 2 == 4 # :)",
+            "2 + 2 == 5 # :)",
+            lambda mod: mod.body[0].value.comparators[0],
+            ast.Constant(5),
         ),
     ],
 )
@@ -53,20 +54,20 @@ def test_apply_simple(source, expected, target_func, replacement):
     "source, expected, target_func",
     [
         (
-                """
+            """
                 import x # comments
                 print(x.y) # comments here
                 def something(x, y):
                     return x + y # comments
             """,
-                """
+            """
                 import x # comments
                 import x
                 print(x.y) # comments here
                 def something(x, y):
                     return x + y # comments
             """,
-                lambda mod: mod.body[0],
+            lambda mod: mod.body[0],
         )
     ],
 )
@@ -150,36 +151,36 @@ class PlaceholderReplacer(Rule):
         ("1+1", "1 - 1", PlusToMinusRule),
         ("print(1 + 1)", "print(1 - 1)", PlusToMinusRule),
         (
-                "print(1 + 1, some_other_stuff) and 2 + 2",
-                "print(1 - 1, some_other_stuff) and 2 - 2",
-                PlusToMinusRule,
+            "print(1 + 1, some_other_stuff) and 2 + 2",
+            "print(1 - 1, some_other_stuff) and 2 - 2",
+            PlusToMinusRule,
         ),
         (
-                """
+            """
                 print(
                     1 +
                     2
                 )
             """,
-                """
+            """
                 print(
                     1 - 2
                 )
             """,
-                PlusToMinusRule,
+            PlusToMinusRule,
         ),
         (
-                "print(x, y, placeholder, z)",
-                "print(x, y, 42, z)",
-                PlaceholderReplacer,
+            "print(x, y, placeholder, z)",
+            "print(x, y, 42, z)",
+            PlaceholderReplacer,
         ),
     ]
     + [
         ("1*1", "1*1", PlusToMinusRule),
         (
-                "print(no,change,style)",
-                "print(no,change,style)",
-                PlusToMinusRule,
+            "print(no,change,style)",
+            "print(no,change,style)",
+            PlusToMinusRule,
         ),
     ],
 )
@@ -214,7 +215,10 @@ def test_session_simple_with_string(source, rules, expected):
 
 @dataclass
 class CollectPlusToMinusMultToMinusRule(RuleCollection):
-    rules = [PlusToMinusRule, MultToMinusRule, ]
+    rules = [
+        PlusToMinusRule,
+        MultToMinusRule,
+    ]
 
 
 class CollectMultToMinusPlusToMinusRule(RuleCollection):
@@ -228,7 +232,7 @@ class CollectMultToMinusPlusToMinusRule(RuleCollection):
         ("1+1*2", "1 - 1 - 2", CollectMultToMinusPlusToMinusRule),
         ("1*1+2", "1 - 1 - 2", CollectPlusToMinusMultToMinusRule),
         ("1*1+2", "1 - 1 - 2", CollectMultToMinusPlusToMinusRule),
-    ]
+    ],
 )
 def test_session_collection(source, rules, expected):
     if isinstance(rules, type):
@@ -242,11 +246,17 @@ def test_session_collection(source, rules, expected):
 
 
 class CollectPlusToMinusMultToMinusRuleWithString(RuleCollection):
-    rules: ClassVar = ["PlusToMinusRule", MultToMinusRule, ]
+    rules: ClassVar = [
+        "PlusToMinusRule",
+        MultToMinusRule,
+    ]
 
 
 class CollectPlus_MinusMultToMinusRuleWithString(RuleCollection):
-    rules: ClassVar = ["Plus_MinusRule", MultToMinusRule, ]
+    rules: ClassVar = [
+        "Plus_MinusRule",
+        MultToMinusRule,
+    ]
 
 
 @pytest.mark.parametrize(
@@ -254,7 +264,7 @@ class CollectPlus_MinusMultToMinusRuleWithString(RuleCollection):
     [
         ("1+1*2", "1 - 1 - 2", CollectPlusToMinusMultToMinusRuleWithString),
         ("1+1*2", "1+1 - 2", CollectPlus_MinusMultToMinusRuleWithString),
-    ]
+    ],
 )
 def test_session_collection_with_string(source, rules, expected):
     if isinstance(rules, type):
@@ -275,7 +285,7 @@ class CollectCollectRule(RuleCollection):
     "source, expected, rules",
     [
         ("1+1*2/3%4", "1 - 1 - 2 - 3 - 4", CollectCollectRule),
-    ]
+    ],
 )
 def test_session_multicollection(source, rules, expected):
     if isinstance(rules, type):
@@ -334,48 +344,56 @@ def test_session_run_file_collection(tmp_path):
 
     file = tmp_path / "collect_string_collection.py"
     with open(file, "w") as handle:
-        handle.write("from refactor.core import RuleCollection\n"
-                     "class CollectStringCollection(RuleCollection):\n"
-                     "    rules = [\"TestThis\", \"TestThat\"]\n")
+        handle.write(
+            "from refactor.core import RuleCollection\n"
+            "class CollectStringCollection(RuleCollection):\n"
+            '    rules = ["TestThis", "TestThat"]\n'
+        )
 
     file = tmp_path / "test_this.py"
     with open(file, "w") as handle:
-        handle.write("import ast\n"
-                     "from refactor.core import Rule\n"
-                     "from refactor.actions import LazyReplace\n"
-                     "from .test_that import TestThat\n"
-                     "class SimpleAction(LazyReplace):\n"
-                     "    def build(self):\n"
-                     "        node = self.branch()\n"
-                     "        node.op = ast.Sub()\n"
-                     "        return node\n"
-                     "class TestThis(Rule):\n"
-                     "    def match(self, node):\n"
-                     "        assert isinstance(node, ast.BinOp)\n"
-                     "        assert isinstance(node.op, ast.Add)\n"
-                     "        return SimpleAction(node)\n")
+        handle.write(
+            "import ast\n"
+            "from refactor.core import Rule\n"
+            "from refactor.actions import LazyReplace\n"
+            "from .test_that import TestThat\n"
+            "class SimpleAction(LazyReplace):\n"
+            "    def build(self):\n"
+            "        node = self.branch()\n"
+            "        node.op = ast.Sub()\n"
+            "        return node\n"
+            "class TestThis(Rule):\n"
+            "    def match(self, node):\n"
+            "        assert isinstance(node, ast.BinOp)\n"
+            "        assert isinstance(node.op, ast.Add)\n"
+            "        return SimpleAction(node)\n"
+        )
 
     file = tmp_path / "test_that.py"
     with open(file, "w") as handle:
-        handle.write("import ast\n"
-                     "from refactor.core import Rule\n"
-                     "from refactor.actions import LazyReplace\n"
-                     "class SimpleAction(LazyReplace):\n"
-                     "    def build(self):\n"
-                     "        node = self.branch()\n"
-                     "        node.op = ast.Sub()\n"
-                     "        return node\n"
-                     "class TestThat(Rule):\n"
-                     "    def match(self, node):\n"
-                     "        assert isinstance(node, ast.BinOp)\n"
-                     "        assert isinstance(node.op, ast.Mult)\n"
-                     "        return SimpleAction(node)\n")
+        handle.write(
+            "import ast\n"
+            "from refactor.core import Rule\n"
+            "from refactor.actions import LazyReplace\n"
+            "class SimpleAction(LazyReplace):\n"
+            "    def build(self):\n"
+            "        node = self.branch()\n"
+            "        node.op = ast.Sub()\n"
+            "        return node\n"
+            "class TestThat(Rule):\n"
+            "    def match(self, node):\n"
+            "        assert isinstance(node, ast.BinOp)\n"
+            "        assert isinstance(node.op, ast.Mult)\n"
+            "        return SimpleAction(node)\n"
+        )
 
     test_file = tmp_path / "test.py"
     with open(test_file, "w") as handle:
         handle.write("1+1*1")
 
-    module = SourceFileLoader("collect_string_collection", str(tmp_path) + "/collect_string_collection.py").load_module()
+    module = SourceFileLoader(
+        "collect_string_collection", str(tmp_path) + "/collect_string_collection.py"
+    ).load_module()
     session = Session([module.CollectStringCollection])
 
     change = session.run_file(test_file)
@@ -430,8 +448,8 @@ INVALID_GENERATED_SOURCE_CODE = re.compile(
 def test_session_run_invalid_generated_code_debug_mode():
     session = Session([InvalidRule], config=Configuration(debug_mode=True))
     with pytest.raises(
-            ValueError,
-            match=INVALID_GENERATED_SOURCE_CODE,
+        ValueError,
+        match=INVALID_GENERATED_SOURCE_CODE,
     ) as exc_info:
         session.run("z = 1")
 
