@@ -125,7 +125,14 @@ class Unparser(Protocol):
         ...  # pragma: no cover
 
 
-class BaseUnparser(ast._Unparser):  # type: ignore
+try:
+    _UnparserBase = ast._Unparser
+except AttributeError:
+    # Python 3.14+: _Unparser moved to C extension module
+    from _ast_unparse import Unparser as _UnparserBase  # type: ignore[import-not-found]
+
+
+class BaseUnparser(_UnparserBase):  # type: ignore
     """A public :py:class:`ast._Unparser` API that can
     be used to customize the AST re-synthesis process."""
 
