@@ -6,16 +6,16 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   sync:
-    name: "Merge development → applications"
+    name: "Sync development → applications (via PR)"
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout applications branch
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: applications
           fetch-depth: 0
 
       - name: Configure git
@@ -23,10 +23,31 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Merge development into applications
+      - name: Create sync branch
         run: |
-          git fetch origin development
+          git checkout -b auto-sync/development origin/applications
           git merge origin/development --no-edit -m "chore: auto-sync from development"
 
-      - name: Push updated applications
-        run: git push origin applications
+      - name: Push sync branch
+        run: git push origin auto-sync/development --force
+
+      - name: Create or update PR and merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          EXISTING_PR=$(gh pr list --base applications --head auto-sync/development --json number --jq '.[0].number')
+          if [ -z "$EXISTING_PR" ]; then
+            EXISTING_PR=$(gh pr create \
+              --base applications \
+              --head auto-sync/development \
+              --title "chore: auto-sync from development" \
+              --body "Automated sync of development branch changes into applications." \
+              | grep -oP '#\K[0-9]+' || true)
+            echo "Created PR #$EXISTING_PR"
+          else
+            echo "PR #$EXISTING_PR already exists, updated by push"
+          fi
+          # Merge the PR
+          if [ -n "$EXISTING_PR" ]; then
+            gh pr merge "$EXISTING_PR" --merge --delete-branch || echo "Merge failed, PR may need manual merge"
+          fi
