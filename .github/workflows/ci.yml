@@ -30,17 +30,29 @@ jobs:
   branch-policy:
     name: "Branch Policy"
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    if: github.event_name == 'pull_request'
     steps:
-      - name: Check source branch
+      - name: Check branch policy
         run: |
-          if [ "${{ github.head_ref }}" != "development" ]; then
+          BASE="${{ github.base_ref }}"
+          HEAD="${{ github.head_ref }}"
+
+          # Rule 1: PRs to main must come from development only
+          if [ "$BASE" = "main" ] && [ "$HEAD" != "development" ]; then
             echo "❌ PRs to main must come from development branch"
-            echo "   Source: ${{ github.head_ref }}"
+            echo "   Source: $HEAD"
             echo "   Expected: development"
             exit 1
           fi
-          echo "✅ PR from development to main - allowed"
+
+          # Rule 2: applications branch must never be merged into main or development
+          if [ "$HEAD" = "applications" ]; then
+            echo "❌ applications branch must not be merged into $BASE"
+            echo "   applications is a downstream consumer of development, not a source"
+            exit 1
+          fi
+
+          echo "✅ Branch policy passed: $HEAD → $BASE"
 
   ci-success:
     name: "CI Success"
