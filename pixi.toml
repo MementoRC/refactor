@@ -3,6 +3,9 @@ name = "refactor"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-64", "osx-arm64"]
 
+[activation]
+scripts = ["scripts/activate.sh"]
+
 [feature.ci.dependencies]
 python = ">=3.10"
 ruff = ">=0.8.4"
@@ -17,7 +20,7 @@ lint = "ruff check ."
 lint-fix = "ruff check --fix ."
 format = "ruff format ."
 format-check = "ruff format --check ."
-type-check = "mypy refactor/"
+type-check = "PYTHONPATH=. mypy refactor/"
 quality = { depends-on = ["lint", "type-check"] }
 test = "PYTHONPATH=. pytest tests/ --cov=refactor --cov-report=term-missing"
 security = "bandit -c pyproject.toml -r refactor/"
