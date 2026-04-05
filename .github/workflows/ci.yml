@@ -45,11 +45,10 @@ jobs:
             exit 1
           fi
 
-          # Rule 2: applications branch must never be merged into main or development
+          # Rule 2: applications branch — warn but don't fail (used as CI dashboard PR)
           if [ "$HEAD" = "applications" ]; then
-            echo "❌ applications branch must not be merged into $BASE"
-            echo "   applications is a downstream consumer of development, not a source"
-            exit 1
+            echo "⚠️ applications → $BASE: DO NOT MERGE (applications is downstream-only)"
+            echo "   This PR exists for CI visibility only"
           fi
 
           echo "✅ Branch policy passed: $HEAD → $BASE"
