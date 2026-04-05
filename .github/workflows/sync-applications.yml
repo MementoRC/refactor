@@ -6,16 +6,16 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   sync:
-    name: "Merge development → applications"
+    name: "Sync development → applications (via PR)"
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout applications branch
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: applications
           fetch-depth: 0
 
       - name: Configure git
@@ -23,10 +23,28 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Merge development into applications
+      - name: Create sync branch
         run: |
-          git fetch origin development
+          git checkout -b auto-sync/development origin/applications
           git merge origin/development --no-edit -m "chore: auto-sync from development"
 
-      - name: Push updated applications
-        run: git push origin applications
+      - name: Push sync branch
+        run: git push origin auto-sync/development --force
+
+      - name: Create or update PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          EXISTING_PR=$(gh pr list --base applications --head auto-sync/development --json number --jq '.[0].number')
+          if [ -n "$EXISTING_PR" ]; then
+            echo "PR #$EXISTING_PR already exists, updated by push"
+          else
+            gh pr create \
+              --base applications \
+              --head auto-sync/development \
+              --title "chore: auto-sync from development" \
+              --body "Automated sync of development branch changes into applications.
+
+          This PR is created automatically when development is updated.
+          Merge when CI passes."
+          fi
