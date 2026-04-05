@@ -459,3 +459,31 @@ class ChangeSign(Rule):
 def test_session_run_deterministic_for_on_off_rules():
     session = Session([ChangeSign])
     assert session.run("2 + 2") == "2 - 2"
+
+
+def test_session_thread_local_config():
+    """Concurrent sessions with different configs use thread-local storage."""
+    import threading
+
+    from refactor.context import Configuration
+    from refactor.core import _thread_local
+
+    results = {}
+
+    def run_session(name, debug_mode):
+        config = Configuration(debug_mode=debug_mode)
+        session = Session([], config=config)
+        # _initialize_rules sets _thread_local.current_config
+        session._initialize_rules(ast.parse("x = 1"), "x = 1", common._FileInfo())
+        # Verify thread-local has the right config
+        results[name] = getattr(_thread_local, "current_config", None)
+
+    t1 = threading.Thread(target=run_session, args=("t1", True))
+    t2 = threading.Thread(target=run_session, args=("t2", False))
+    t1.start()
+    t1.join()
+    t2.start()
+    t2.join()
+
+    assert results["t1"].debug_mode is True
+    assert results["t2"].debug_mode is False

@@ -235,9 +235,9 @@ def unpack_lhs(node: ast.AST) -> Iterator[str]:
 def next_statement_of(node: ast.stmt, context: Context) -> ast.stmt | None:
     """Get the statement that follows ``node`` in the same syntactical block."""
     parent_field, parent = context.ancestry.infer(node)
-    if not parent_field is not None:
+    if parent_field is None:
         raise ValueError("condition failed: parent_field is not None")
-    if not parent is not None:
+    if parent is None:
         raise ValueError("condition failed: parent is not None")
     parent_field_val = getattr(parent, parent_field)
     if not isinstance(parent_field_val, list):

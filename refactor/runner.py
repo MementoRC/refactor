@@ -65,6 +65,7 @@ def run_files(
     files: Iterable[Path],
     apply: bool = False,
     workers: Any = _DEFAULT_WORKERS,
+    verbose: bool = False,
 ) -> int:
     workers = _determine_workers(workers, session.config.debug_mode)
 
@@ -91,14 +92,16 @@ def run_files(
 
             stats["reformatted"] += 1
             if apply:
-                #print(f"reformatted {change.file!s}")
+                if verbose:
+                    print(f"reformatted {change.file!s}")
                 change.apply_diff()
             else:
                 print(change.compute_diff())
 
-    #print("All done!")
-    #if message := dump_stats(stats):
-    #    print(message)
+    if verbose:
+        print("All done!")
+        if message := dump_stats(stats):
+            print(message)
 
     return stats["reformatted"] > 0
 
@@ -109,8 +112,9 @@ def unbound_main(session: Session, argv: list[str] | None = None) -> int:
     parser.add_argument("-a", "--apply", action="store_true", default=False)
     parser.add_argument("-w", "--workers", type=int, default=_DEFAULT_WORKERS)
     parser.add_argument("-d", "--enable-debug-mode", action="store_true", default=False)
+    parser.add_argument("-v", "--verbose", action="store_true", default=False)
 
-    options = parser.parse_args()
+    options = parser.parse_args(argv)
     session.config.debug_mode = options.enable_debug_mode
     files = chain.from_iterable(
         expand_paths(source_dest) for source_dest in options.src
@@ -120,6 +124,7 @@ def unbound_main(session: Session, argv: list[str] | None = None) -> int:
         files,
         apply=options.apply,
         workers=options.workers,
+        verbose=options.verbose,
     )
 
 

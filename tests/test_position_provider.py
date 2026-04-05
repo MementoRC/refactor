@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import ast
+import textwrap
 from collections.abc import Iterator
 from pathlib import Path
+
+import pytest
 
 import refactor
 from refactor import common
@@ -33,3 +36,92 @@ def test_position_provider_for_definitions():
                 context.source, position
             )
             assert known_location == node.name
+
+
+def test_infer_position_simple_function():
+    source = textwrap.dedent("""\
+        def foo():
+            pass
+    """)
+    tree = ast.parse(source)
+    context = Context(source, tree)
+    node = tree.body[0]
+    assert isinstance(node, ast.FunctionDef)
+    position = infer_identifier_position(node, "foo", context)
+    assert position is not None
+    assert common._get_known_location_from_source(source, position) == "foo"
+
+
+def test_infer_position_async_function():
+    source = textwrap.dedent("""\
+        async def bar():
+            pass
+    """)
+    tree = ast.parse(source)
+    context = Context(source, tree)
+    node = tree.body[0]
+    assert isinstance(node, ast.AsyncFunctionDef)
+    position = infer_identifier_position(node, "bar", context)
+    assert position is not None
+    assert common._get_known_location_from_source(source, position) == "bar"
+
+
+def test_infer_position_class():
+    source = textwrap.dedent("""\
+        class MyClass:
+            pass
+    """)
+    tree = ast.parse(source)
+    context = Context(source, tree)
+    node = tree.body[0]
+    assert isinstance(node, ast.ClassDef)
+    position = infer_identifier_position(node, "MyClass", context)
+    assert position is not None
+    assert common._get_known_location_from_source(source, position) == "MyClass"
+
+
+def test_infer_position_decorated_function():
+    source = textwrap.dedent("""\
+        @decorator
+        def decorated():
+            pass
+    """)
+    tree = ast.parse(source)
+    context = Context(source, tree)
+    node = tree.body[0]
+    assert isinstance(node, ast.FunctionDef)
+    position = infer_identifier_position(node, "decorated", context)
+    assert position is not None
+    assert common._get_known_location_from_source(source, position) == "decorated"
+
+
+def test_infer_position_returns_none_for_unsupported():
+    source = textwrap.dedent("""\
+        x = 1
+    """)
+    tree = ast.parse(source)
+    context = Context(source, tree)
+    # ast.Assign is not registered with infer_identifier_position;
+    # the base singledispatch returns None (implicitly via ...)
+    node = tree.body[0]
+    assert isinstance(node, ast.Assign)
+    result = infer_identifier_position(node, "x", context)
+    assert result is None
+
+
+def test_infer_position_multiline_decorators():
+    source = textwrap.dedent("""\
+        @decorator_one(
+            arg=True,
+        )
+        @decorator_two
+        def multi_decorated():
+            pass
+    """)
+    tree = ast.parse(source)
+    context = Context(source, tree)
+    node = tree.body[0]
+    assert isinstance(node, ast.FunctionDef)
+    position = infer_identifier_position(node, "multi_decorated", context)
+    assert position is not None
+    assert common._get_known_location_from_source(source, position) == "multi_decorated"

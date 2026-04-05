@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import os
 from pathlib import Path
 
 import refactor
@@ -9,10 +10,20 @@ from refactor.context import Scope
 
 
 class RefactorAsserts(refactor.Rule):
-    FILES = frozenset(["refactor/common.py"])
+    import os
+    from pathlib import Path
+
+    # Store normalized absolute paths for comparison
+    FILES = frozenset(
+        os.path.normcase(str(Path(f).resolve()))
+        for f in ["refactor/common.py"]
+    )
 
     def check_file(self, file: Path | None) -> bool:
-        return str(file) in self.FILES
+        if file is None:
+            return False
+        normalized_file = os.path.normcase(str(file.resolve()))
+        return normalized_file in self.FILES
 
     def match(self, node: ast.AST) -> Replace:
         assert isinstance(node, ast.Assert)
@@ -43,11 +54,17 @@ def _is_hinted_with(node: ast.AST, name: str) -> bool:
 
 
 class ProcessDeprecationHints(refactor.Rule):
-    FILES = frozenset(["refactor/actions.py"])
+    FILES = frozenset(
+        os.path.normcase(str(Path(f).resolve()))
+        for f in ["refactor/actions.py"]
+    )
     context_providers = (Scope,)
 
     def check_file(self, file: Path | None) -> bool:
-        return str(file) in self.FILES
+        if file is None:
+            return False
+        normalized_file = os.path.normcase(str(file.resolve()))
+        return normalized_file in self.FILES
 
     def match(self, node: ast.AST) -> InsertAfter | None:
         assert isinstance(node, ast.ClassDef)
@@ -66,7 +83,7 @@ class ProcessDeprecationHints(refactor.Rule):
             bases=[ast.Name(node.name), ast.Name("_DeprecatedAliasMixin")],
             keywords=[],
             body=[ast.Expr(ast.Constant(...))],
-            decorator_list=[ast.Name("dataclass")],
+            decorator_list=[ast.Name("dataclass", ctx=ast.Load())],
         )
         return InsertAfter(node, replacement)
 

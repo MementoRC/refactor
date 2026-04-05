@@ -6,6 +6,7 @@ import importlib.util
 import inspect
 import sys
 import tempfile
+import threading
 import tokenize
 import warnings
 from collections.abc import Iterator
@@ -34,11 +35,13 @@ from refactor.context import (
 )
 from refactor.internal.action_optimizer import optimize
 
+_thread_local = threading.local()
+
 
 def _unparsable_source_code(source: str, exc: SyntaxError) -> NoReturn:
     error_message = "Generated source is unparsable."
 
-    if Session.c_current_config.debug_mode:
+    if getattr(_thread_local, "current_config", Configuration()).debug_mode:
         fd, file_name = tempfile.mkstemp(prefix="refactor", text=True)
         with open(fd, "w") as stream:
             stream.write(source)
@@ -391,7 +394,6 @@ class _SourceFromRuleOrCollection:
 @dataclass
 class Session:
     """A refactoring session that consists of a set of rules and a configuration."""
-    c_current_config: ClassVar[Configuration]
 
     rules: list[str | type[Rule] | type[RuleCollection]] = field(default_factory=list)
     config: Configuration = field(default_factory=Configuration)
@@ -434,7 +436,7 @@ class Session:
             file_info: _FileInfo,
     ) -> list[Rule]:
         """Initialize all the rules in the session. This is done by calling the ``initialize`` method on each rule. """
-        Session.c_current_config = self.config
+        _thread_local.current_config = self.config
 
         context = Context._from_dependencies(
             _resolve_dependencies(self.rules),  # type: ignore
