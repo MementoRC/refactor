@@ -3,7 +3,7 @@ from __future__ import annotations
 import ast
 
 from refactor import Replace
-from refactor.actions import Erase
+from refactor.actions import Erase, InsertAfter, InsertBefore
 from refactor.common import clone
 from refactor.core import Rule
 
@@ -76,6 +76,26 @@ class RemoveUnittestInheritance(Rule):
 
         new_node = clone(node)
         new_node.bases = new_bases
+
+        # If non-unittest bases remain (mixins), inject ``__init__ = None``
+        # so pytest can collect the class despite any mixin __init__.
+        # Only add it when the class doesn't already define its own __init__.
+        if new_bases:
+            has_own_init = any(
+                isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and stmt.name == "__init__"
+                for stmt in node.body
+            )
+            if not has_own_init:
+                init_none = ast.Assign(
+                    targets=[ast.Name(id="__init__", ctx=ast.Store())],
+                    value=ast.Constant(value=None),
+                    lineno=0,
+                    col_offset=0,
+                )
+                ast.fix_missing_locations(init_none)
+                new_node.body = [init_none] + new_node.body
+
         return Replace(node, new_node)
 
 
@@ -593,6 +613,70 @@ class ConvertUnittestDecorators(Rule):
         return Replace(node, new_node)
 
 
+def _has_pytest_reference(tree: ast.Module) -> bool:
+    """Return True if the tree has any reference to pytest (pytest.* or bare pytest name)."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute):
+            if isinstance(node.value, ast.Name) and node.value.id == "pytest":
+                return True
+        if isinstance(node, ast.Name) and node.id == "pytest":
+            return True
+    return False
+
+
+def _has_pytest_import(tree: ast.Module) -> bool:
+    """Return True if ``import pytest`` already exists in the module."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "pytest" and alias.asname is None:
+                    return True
+    return False
+
+
+class AddPytestImport(Rule):
+    """Insert ``import pytest`` when pytest references exist but no import is present yet.
+
+    This fires after all other rules have added pytest references (e.g. pytest.raises,
+    pytest.approx, pytest.fixture, pytest.mark.*).
+
+    - When import statements are present: fires on the *last* import and inserts after it.
+    - When no import statements remain (e.g. after RemoveUnittestImport erased the only
+      import): fires on the first statement of the module and inserts before it.
+    """
+
+    def match(self, node: ast.AST) -> InsertAfter | InsertBefore | None:
+        assert isinstance(node, ast.stmt)
+
+        tree = self.context.tree
+        assert isinstance(tree, ast.Module)
+        assert tree.body
+
+        # Nothing to do if import pytest is already present
+        assert not _has_pytest_import(tree)
+
+        # Only fire if there are actual pytest.* / pytest references in the tree
+        assert _has_pytest_reference(tree)
+
+        import_node = ast.Import(names=[ast.alias(name="pytest")])
+        ast.fix_missing_locations(import_node)
+
+        # Prefer inserting after the last top-level import
+        last_import: ast.stmt | None = None
+        for stmt in tree.body:
+            if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                last_import = stmt
+
+        if last_import is not None:
+            # Only fire on the last import so insertion happens exactly once
+            assert last_import is node, "Not the last import statement"
+            return InsertAfter(node, import_node)
+
+        # No imports remain — insert before the first statement, firing only once
+        assert tree.body[0] is node, "Not the first statement"
+        return InsertBefore(node, import_node)
+
+
 # All migration rules in application order
 ALL_RULES = [
     RemoveUnittestInheritance,
@@ -602,9 +686,16 @@ ALL_RULES = [
     ConvertSetUpTearDown,
     ConvertAssertRaises,
     ConvertUnittestDecorators,
+    AddPytestImport,  # Must be last: adds import pytest after all pytest refs are created
 ]
 
 if __name__ == "__main__":
-    import refactor
+    from functools import partial
 
-    refactor.run(ALL_RULES)
+    import refactor
+    from refactor.runner import unbound_main
+
+    session = refactor.Session(ALL_RULES)
+    session.config.debug_mode = True  # Force single-worker to avoid pickle errors (#9)
+    main = partial(unbound_main, session=session)
+    main()
