@@ -40,12 +40,20 @@ ignore = ["E501"]
     "E731",   # lambda assignment
     "E741",   # ambiguous variable name
     "F401",   # imported but unused (re-exports in __init__.py)
+    "F402",   # import shadowed by loop variable
+    "F403",   # wildcard import
     "F811",   # redefinition of unused name
+    "F841",   # unused variable
     "W291",   # trailing whitespace
+    "W293",   # whitespace on blank line
+    "B020",   # loop variable overrides iterable
+    "B904",   # raise from within except
+    "B905",   # zip strict
 ]
 "refactor/internal/*.py" = [
     "UP006", "UP007", "UP035",
     "B006", "B007", "B008", "B023", "B024",
+    "B904", "B905",
     "E731", "E741",
     "F401", "F811",
 ]
@@ -54,6 +62,10 @@ ignore = ["E501"]
 # Tests — allow assert statements and some flexibility
 "tests/*.py" = [
     "B011",  # assert False
+    "B007",  # unused loop variable
+    "B905",  # zip strict
+    "F841",  # unused variable
+    "W293",  # whitespace on blank line (test fixtures with intentional whitespace)
     "UP006", "UP007", "UP035",
 ]
 
