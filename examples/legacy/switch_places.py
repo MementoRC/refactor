@@ -13,7 +13,6 @@ $ python examples/switch_places.py t.py
 ```
 """
 
-
 from __future__ import annotations
 
 import ast

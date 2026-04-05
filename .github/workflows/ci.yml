@@ -17,12 +17,11 @@ jobs:
       checks: write
     with:
       pixi-environment: "ci"
-      python-versions: '["3.10", "3.11", "3.12"]'
+      python-versions: '["3.10", "3.11", "3.12", "3.14"]'
       os-matrix: '["ubuntu-latest"]'
       enable-performance: false
-      enable-release: false
       enable-hygiene-check: true
-      editable-install: true
+      editable-install: false
       package-path: "."
       allowed-licenses: "MIT, Apache-2.0, BSD-3-Clause, BSD-2-Clause, PSF-2.0, LGPL-3.0"
     secrets: inherit

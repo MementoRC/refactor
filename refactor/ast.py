@@ -10,7 +10,7 @@ from collections.abc import Generator, Iterator
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from functools import cached_property, partial
-from typing import Any, ContextManager, Protocol, SupportsIndex, TypeVar, Union, cast, Tuple
+from typing import Any, ContextManager, Protocol, SupportsIndex, Tuple, TypeVar, Union, cast
 
 from refactor import common
 from refactor.common import find_indent
@@ -48,12 +48,20 @@ class Lines(UserList[StringType]):
         def closest(s: Tuple[int, SourceSegment], i: int = 0) -> int:
             return abs(s[0] - i)
 
-        indentation, start_prefix = find_indent(source_lines[markers[0]][:markers[1]])
-        end_suffix = "" if markers[2] is None else source_lines[-1][markers[2]:]
+        indentation, start_prefix = find_indent(source_lines[markers[0]][: markers[1]])
+        end_suffix = "" if markers[2] is None else source_lines[-1][markers[2] :]
 
         original_line: str | None
         for index, line in enumerate(self.data):
-            if len(match_list := sorted([(i, s) for i, s in enumerate(source_lines) if s.startswith(line[:-1])], key=partial(closest, i=index))) > 0:
+            if (
+                len(
+                    match_list := sorted(
+                        [(i, s) for i, s in enumerate(source_lines) if s.startswith(line[:-1])],
+                        key=partial(closest, i=index),
+                    )
+                )
+                > 0
+            ):
                 original_line = match_list[0][1]
             else:
                 original_line = None
@@ -95,9 +103,7 @@ class SourceSegment(UserString):
             # re-implements the direct indexing as slicing (e.g. a[1] is a[1:2], with
             # error handling).
             direct_index = operator.index(index)
-            view = raw_line[direct_index: direct_index + 1].decode(
-                encoding=self.encoding
-            )
+            view = raw_line[direct_index : direct_index + 1].decode(encoding=self.encoding)
             if not view:
                 raise IndexError("index out of range")
 
@@ -118,14 +124,19 @@ def split_lines(source: str, *, encoding: str | None = None) -> Lines:
 
 
 class Unparser(Protocol):
-    def __init__(self, source: str, *args: Any, **kwargs: Any) -> None:
-        ...  # pragma: no cover
+    def __init__(self, source: str, *args: Any, **kwargs: Any) -> None: ...  # pragma: no cover
 
-    def unparse(self, node: ast.AST) -> str:
-        ...  # pragma: no cover
+    def unparse(self, node: ast.AST) -> str: ...  # pragma: no cover
 
 
-class BaseUnparser(ast._Unparser):  # type: ignore
+try:
+    _UnparserBase = ast._Unparser
+except AttributeError:
+    # Python 3.14+: _Unparser moved to C extension module
+    from _ast_unparse import Unparser as _UnparserBase  # type: ignore[import-not-found]
+
+
+class BaseUnparser(_UnparserBase):  # type: ignore
     """A public :py:class:`ast._Unparser` API that can
     be used to customize the AST re-synthesis process."""
 

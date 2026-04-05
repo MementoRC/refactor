@@ -7,7 +7,7 @@ from dataclasses import dataclass, field, replace
 from enum import Enum, auto
 from functools import cached_property
 from pathlib import Path
-from typing import Any, ClassVar, DefaultDict, Protocol, cast, Type, List, Generator, Deque, Set
+from typing import Any, ClassVar, DefaultDict, Deque, Generator, List, Protocol, Set, Type, cast
 
 import refactor.common as common
 from refactor.ast import UNPARSER_BACKENDS, BaseUnparser
@@ -28,24 +28,23 @@ class Configuration:
 class _Dependable(Protocol):
     context_providers: ClassVar[tuple[type[Representative], ...]]
 
-    def __init__(self, context: Context) -> None:
-        ...
+    def __init__(self, context: Context) -> None: ...
 
 
 def _deque_expand(
-        iterable: Iterable[type[_Dependable] | Iterable[type[_Dependable]]],
+    iterable: Iterable[type[_Dependable] | Iterable[type[_Dependable]]],
 ) -> Generator[type[_Dependable]]:
     q: Deque[type[_Dependable] | Iterable[type[_Dependable]]] = deque(iterable)
     while q:
         item: type[_Dependable] | Iterable[type[_Dependable]] = q.popleft()
-        if hasattr(item, '__iter__') or isinstance(item, Iterable):
+        if hasattr(item, "__iter__") or isinstance(item, Iterable):
             q.extendleft(iter(item))
         else:
             yield item
 
 
 def _resolve_dependencies(
-        dependables: Iterable[type[_Dependable] | Iterable[type[_Dependable]]],
+    dependables: Iterable[type[_Dependable] | Iterable[type[_Dependable]]],
 ) -> Set[Type[Representative]]:
     dependencies: Set[type[Representative]] = set()
 
@@ -53,9 +52,9 @@ def _resolve_dependencies(
     while pool:
         dependable: type[_Dependable] = pool.pop()
         pool.extendleft(
-            (cast(type[_Dependable], dependency)
-             for dependency in dependable.context_providers
-             if dependency not in dependencies)
+            cast(type[_Dependable], dependency)
+            for dependency in dependable.context_providers
+            if dependency not in dependencies
         )
 
         if issubclass(dependable, Representative):
@@ -88,9 +87,7 @@ class Context:
         context._import_dependencies(dependencies)
         return context
 
-    def _import_dependencies(
-        self, representatives: Iterable[type[Representative]]
-    ) -> None:
+    def _import_dependencies(self, representatives: Iterable[type[Representative]]) -> None:
         for raw_representative in representatives:
             representative = raw_representative(self)
             self.metadata[representative.name] = representative
@@ -106,8 +103,7 @@ class Context:
         if isinstance(unparser_backend, str):
             if unparser_backend not in UNPARSER_BACKENDS:
                 raise ValueError(
-                    "'unparser_backend' must be one of "
-                    f"these: {', '.join(UNPARSER_BACKENDS)}"
+                    f"'unparser_backend' must be one of these: {', '.join(UNPARSER_BACKENDS)}"
                 )
             backend_cls = UNPARSER_BACKENDS[unparser_backend]
         elif isinstance(unparser_backend, type):
@@ -123,9 +119,7 @@ class Context:
     def __getitem__(self, key: str) -> Representative:
         # For built-in representatives, we can automatically import them.
         if key in _BUILTIN_REPRESENTATIVES:
-            self._import_dependencies(
-                _resolve_dependencies([_BUILTIN_REPRESENTATIVES[key]])
-            )
+            self._import_dependencies(_resolve_dependencies([_BUILTIN_REPRESENTATIVES[key]]))
 
         if key not in self.metadata:
             raise ValueError(
@@ -323,9 +317,7 @@ class ScopeInfo(common._Singleton):
                 # for a, b in c: ...
                 for identifier in common.unpack_lhs(node.target):
                     local_definitions[identifier].append(node)
-            elif isinstance(
-                node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-            ):
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 # def something(): ...
                 local_definitions[node.name].append(node)
             elif isinstance(node, ast.arg):
@@ -385,9 +377,7 @@ class Scope(Representative):
                 scope_type = ScopeType.GLOBAL
             elif isinstance(parent, ast.ClassDef):
                 scope_type = ScopeType.CLASS
-            elif isinstance(
-                parent, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
-            ):
+            elif isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
                 scope_type = ScopeType.FUNCTION
             elif common.is_comprehension(parent):
                 scope_type = ScopeType.COMPREHENSION

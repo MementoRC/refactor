@@ -93,13 +93,9 @@ def _type_checker(
     return top_level_checker
 
 
-is_comprehension = _type_checker(
-    ast.SetComp, ast.ListComp, ast.DictComp, ast.GeneratorExp
-)
+is_comprehension = _type_checker(ast.SetComp, ast.ListComp, ast.DictComp, ast.GeneratorExp)
 is_function = _type_checker(ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
-is_contextful = _type_checker(
-    ast.Module, ast.ClassDef, binders=[is_function, is_comprehension]
-)
+is_contextful = _type_checker(ast.Module, ast.ClassDef, binders=[is_function, is_comprehension])
 
 
 def compare_ast(left: ast.AST, right: ast.AST, /) -> bool:

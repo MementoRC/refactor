@@ -76,9 +76,7 @@ def ast_delta(baseline: ast.AST, new_node: ast.AST) -> Iterator[ChangeSet]:
             # For the same type, if a field on a node is one of these
             # the same has to be true for the other node.
 
-            baseline_value, new_value = getattr(baseline, field), getattr(
-                new_node, field, _MISSING
-            )
+            baseline_value, new_value = getattr(baseline, field), getattr(new_node, field, _MISSING)
             _incomplete_if(new_value is _MISSING)
 
             _field_change_if = partial(
@@ -90,13 +88,9 @@ def ast_delta(baseline: ast.AST, new_node: ast.AST) -> Iterator[ChangeSet]:
 
             if not _is_constant(baseline_type, field):  # type: ignore
                 if baseline_value is None:
-                    yield from _field_change_if(
-                        new_value is not None, ChangeType.FIELD_ADDITION
-                    )
+                    yield from _field_change_if(new_value is not None, ChangeType.FIELD_ADDITION)
                 else:
-                    yield from _field_change_if(
-                        new_value is None, ChangeType.FIELD_REMOVAL
-                    )
+                    yield from _field_change_if(new_value is None, ChangeType.FIELD_REMOVAL)
 
             if isinstance(baseline_value, ast.AST):
                 _incomplete_if(not isinstance(new_value, ast.AST))
@@ -105,9 +99,7 @@ def ast_delta(baseline: ast.AST, new_node: ast.AST) -> Iterator[ChangeSet]:
                 _incomplete_if(not isinstance(new_value, list))
                 yield from _ast_sequence_delta(baseline, new_node, field)
             else:
-                yield from _field_change_if(
-                    baseline_value != new_value, ChangeType.FIELD_VALUE
-                )
+                yield from _field_change_if(baseline_value != new_value, ChangeType.FIELD_VALUE)
 
 
 def _ast_sequence_delta(
@@ -134,9 +126,7 @@ def _ast_sequence_delta(
         with suppress(_Continue):
             if isinstance(base_item, ast.AST) or base_item is None:
                 if new_item is None or base_item is None:
-                    yield from _item_change_if(
-                        new_item is not base_item, ChangeType.FULL
-                    )
+                    yield from _item_change_if(new_item is not base_item, ChangeType.FULL)
                 else:
                     _incomplete_if(not isinstance(new_item, ast.AST))
                     yield from ast_delta(base_item, new_item)
