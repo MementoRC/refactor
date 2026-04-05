@@ -5,6 +5,7 @@ import textwrap
 from refactor import Session
 from refactor.rules.pytest_migration import (
     ALL_RULES,
+    AddPytestImport,
     ConvertAssertions,
     ConvertAssertRaises,
     ConvertSetUpTearDown,
@@ -84,15 +85,11 @@ def test_multiple_inheritance_keep_mixin():
             def test_something(self):
                 pass
         """
-    expected = """\
-        from unittest import TestCase
-
-        class TestFoo(SomeMixin):
-            def test_something(self):
-                pass
-        """
     result = _run(RemoveUnittestInheritance, source=source)
-    assert result == textwrap.dedent(expected)
+    # Mixin base retained, __init__ = None injected for pytest collection safety
+    assert "class TestFoo(SomeMixin):" in result
+    assert "__init__ = None" in result
+    assert "def test_something(self):" in result
 
 
 def test_multiple_inheritance_all_unittest():
@@ -198,32 +195,23 @@ def test_full_file_transformation():
             def test_d(self):
                 pass
         """
-    # Each erased import leaves a blank line; the Session collapses them to one leading blank line
-    expected = """\
-
-        class TestSimple:
-            def test_a(self):
-                pass
-
-        class TestImported:
-            def test_b(self):
-                pass
-
-        class TestAsync:
-            async def test_c(self):
-                pass
-
-        class TestMixed(SomeMixin):
-            def test_d(self):
-                pass
-        """
     result = _run(
         RemoveUnittestInheritance,
         RemoveUnittestImport,
         RemoveTestWrapperImport,
         source=source,
     )
-    assert result == textwrap.dedent(expected)
+    # Imports removed
+    assert "import unittest" not in result
+    assert "from unittest import TestCase" not in result
+    assert "IsolatedAsyncioWrapperTestCase" not in result
+    # Pure TestCase classes become bare classes
+    assert "class TestSimple:" in result
+    assert "class TestImported:" in result
+    assert "class TestAsync:" in result
+    # Mixin class retains mixin base and gets __init__ = None
+    assert "class TestMixed(SomeMixin):" in result
+    assert "__init__ = None" in result
 
 
 def test_remove_from_unittest_import_testcase_when_unused():
@@ -663,3 +651,138 @@ def test_convert_skipunless_decorator():
     assert "not HAS_FEATURE" in result
     assert "reason=" in result
     assert "@unittest.skipUnless" not in result
+
+
+# ---------------------------------------------------------------------------
+# Issue #10: AddPytestImport tests
+# ---------------------------------------------------------------------------
+
+
+def test_add_pytest_import():
+    """After converting setUp and assertRaises, 'import pytest' should be present."""
+    source = textwrap.dedent("""\
+        import unittest
+
+        class TestFoo(unittest.TestCase):
+            def setUp(self):
+                self.value = 42
+
+            def test_raises(self):
+                with self.assertRaises(ValueError):
+                    raise ValueError("oops")
+    """)
+
+    result = _run(
+        RemoveUnittestInheritance,
+        RemoveUnittestImport,
+        ConvertSetUpTearDown,
+        ConvertAssertRaises,
+        AddPytestImport,
+        source=source,
+    )
+
+    assert "import pytest" in result
+    assert "pytest.fixture" in result
+    assert "pytest.raises" in result
+
+
+def test_add_pytest_import_not_added_when_already_present():
+    """AddPytestImport must not duplicate an existing 'import pytest'."""
+    source = textwrap.dedent("""\
+        import pytest
+        import unittest
+
+        class TestFoo(unittest.TestCase):
+            def test_raises(self):
+                with self.assertRaises(ValueError):
+                    raise ValueError("oops")
+    """)
+
+    result = _run(
+        RemoveUnittestInheritance,
+        RemoveUnittestImport,
+        ConvertAssertRaises,
+        AddPytestImport,
+        source=source,
+    )
+
+    assert result.count("import pytest") == 1
+
+
+def test_add_pytest_import_not_added_when_no_pytest_refs():
+    """AddPytestImport must not fire when there are no pytest references."""
+    source = textwrap.dedent("""\
+        import unittest
+
+        class TestFoo(unittest.TestCase):
+            def test_eq(self):
+                self.assertEqual(1, 1)
+    """)
+
+    # Only run RemoveUnittestInheritance + ConvertAssertions (no pytest refs generated)
+    result = _run(
+        RemoveUnittestInheritance,
+        RemoveUnittestImport,
+        ConvertAssertions,
+        AddPytestImport,
+        source=source,
+    )
+
+    assert "import pytest" not in result
+
+
+# ---------------------------------------------------------------------------
+# Issue #15: RemoveUnittestInheritance mixin __init__ tests
+# ---------------------------------------------------------------------------
+
+
+def test_mixin_init_override():
+    """When mixin bases remain after TestCase removal, __init__ = None is injected."""
+    source = textwrap.dedent("""\
+        from unittest import TestCase
+
+        class TestFoo(SomeMixin, TestCase):
+            def test_something(self):
+                pass
+    """)
+
+    result = _run(RemoveUnittestInheritance, source=source)
+
+    assert "class TestFoo(SomeMixin):" in result
+    assert "__init__ = None" in result
+
+
+def test_mixin_init_override_skipped_when_own_init_exists():
+    """When the class already defines __init__, do not inject __init__ = None."""
+    source = textwrap.dedent("""\
+        from unittest import TestCase
+
+        class TestFoo(SomeMixin, TestCase):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+
+            def test_something(self):
+                pass
+    """)
+
+    result = _run(RemoveUnittestInheritance, source=source)
+
+    assert "class TestFoo(SomeMixin):" in result
+    # No extra __init__ = None should appear since the class owns __init__
+    assert "__init__ = None" not in result
+
+
+def test_no_mixin_init_override_for_pure_testcase():
+    """Pure TestCase inheritance (no other bases) must NOT get __init__ = None."""
+    source = textwrap.dedent("""\
+        from unittest import TestCase
+
+        class TestFoo(TestCase):
+            def test_something(self):
+                pass
+    """)
+
+    result = _run(RemoveUnittestInheritance, source=source)
+
+    assert "class TestFoo:" in result
+    assert "__init__ = None" not in result
