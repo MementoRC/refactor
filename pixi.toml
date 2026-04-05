@@ -21,9 +21,16 @@ type-check = "PYTHONPATH=. mypy refactor/"
 quality = { depends-on = ["lint", "type-check"] }
 test = "PYTHONPATH=. pytest tests/ --cov=refactor --cov-report=term-missing"
 security = "bandit -c pyproject.toml -r refactor/"
+security-scan = "bandit -c pyproject.toml -r refactor/"
+safety-check = "echo 'No pip dependencies to audit'"
+build = "PYTHONPATH=. python -m build"
 pre-commit-install = "pre-commit install"
 pre-commit-run = "pre-commit run --all-files"
 
 [environments]
 default = { features = ["ci"], solve-group = "default" }
 ci = { features = ["ci"], solve-group = "default" }
+quality = { features = ["ci"], solve-group = "default" }
+quality-extended = { features = ["ci"], solve-group = "default" }
+quality-ci = { features = ["ci"], solve-group = "default" }
+dev = { features = ["ci"], solve-group = "default" }
