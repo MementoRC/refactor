@@ -31,20 +31,23 @@ jobs:
       - name: Push sync branch
         run: git push origin auto-sync/development --force
 
-      - name: Create or update PR
+      - name: Create or update PR and merge
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           EXISTING_PR=$(gh pr list --base applications --head auto-sync/development --json number --jq '.[0].number')
-          if [ -n "$EXISTING_PR" ]; then
-            echo "PR #$EXISTING_PR already exists, updated by push"
-          else
-            gh pr create \
+          if [ -z "$EXISTING_PR" ]; then
+            EXISTING_PR=$(gh pr create \
               --base applications \
               --head auto-sync/development \
               --title "chore: auto-sync from development" \
-              --body "Automated sync of development branch changes into applications.
-
-          This PR is created automatically when development is updated.
-          Merge when CI passes."
+              --body "Automated sync of development branch changes into applications." \
+              | grep -oP '#\K[0-9]+' || true)
+            echo "Created PR #$EXISTING_PR"
+          else
+            echo "PR #$EXISTING_PR already exists, updated by push"
+          fi
+          # Merge the PR
+          if [ -n "$EXISTING_PR" ]; then
+            gh pr merge "$EXISTING_PR" --merge --admin
           fi
