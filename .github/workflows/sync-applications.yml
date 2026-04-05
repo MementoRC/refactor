@@ -49,5 +49,5 @@ jobs:
           fi
           # Merge the PR
           if [ -n "$EXISTING_PR" ]; then
-            gh pr merge "$EXISTING_PR" --merge --admin
+            gh pr merge "$EXISTING_PR" --merge --delete-branch || echo "Merge failed, PR may need manual merge"
           fi
