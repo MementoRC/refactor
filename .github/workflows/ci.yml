@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main, development]
+
+jobs:
+  ci:
+    uses: Claire-s-Monster/ci-framework/.github/workflows/reusable-ci.yml@v2.5.1
+    permissions:
+      contents: write
+      id-token: write
+      pull-requests: write
+      actions: read
+      checks: write
+    with:
+      pixi-environment: "ci"
+      python-versions: '["3.11"]'
+      os-matrix: '["ubuntu-latest"]'
+      enable-performance: false
+      enable-release: false
+      enable-hygiene-check: true
+      editable-install: true
+      package-path: "."
+      allowed-licenses: "MIT, Apache-2.0, BSD-3-Clause, BSD-2-Clause, PSF-2.0, LGPL-3.0"
+    secrets: inherit
+
+  branch-policy:
+    name: "Branch Policy"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    steps:
+      - name: Check source branch
+        run: |
+          if [ "${{ github.head_ref }}" != "development" ]; then
+            echo "❌ PRs to main must come from development branch"
+            echo "   Source: ${{ github.head_ref }}"
+            echo "   Expected: development"
+            exit 1
+          fi
+          echo "✅ PR from development to main - allowed"
+
+  ci-success:
+    name: "CI Success"
+    runs-on: ubuntu-latest
+    needs: [ci]
+    if: always()
+    steps:
+      - name: Check CI status
+        run: |
+          if [ "${{ needs.ci.result }}" != "success" ]; then
+            echo "CI failed"
+            exit 1
+          fi
+          echo "CI passed"
