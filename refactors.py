@@ -10,9 +10,6 @@ from refactor.context import Scope
 
 
 class RefactorAsserts(refactor.Rule):
-    import os
-    from pathlib import Path
-
     # Store normalized absolute paths for comparison
     FILES = frozenset(
         os.path.normcase(str(Path(f).resolve()))
