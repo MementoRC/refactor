@@ -1,4 +1,4 @@
-[project]
+[workspace]
 name = "refactor"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-64", "osx-arm64"]
@@ -26,4 +26,4 @@ pre-commit-run = "pre-commit run --all-files"
 
 [environments]
 default = { features = ["ci"], solve-group = "default" }
-ci = { features = ["ci"], no-default-feature = true }
+ci = { features = ["ci"], solve-group = "default" }
