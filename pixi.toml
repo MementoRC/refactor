@@ -1,0 +1,31 @@
+[project]
+name = "refactor"
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64"]
+
+[dependencies]
+python = ">=3.10"
+
+[feature.ci.dependencies]
+ruff = ">=0.8.4"
+mypy = ">=1.14.0"
+pytest = ">=8.0.0"
+pytest-cov = ">=6.0.0"
+bandit = { version = ">=1.8.0", extras = ["toml"] }
+pre-commit = ">=4.0.0"
+
+[feature.ci.tasks]
+lint = "ruff check ."
+lint-fix = "ruff check --fix ."
+format = "ruff format ."
+format-check = "ruff format --check ."
+type-check = "mypy refactor/"
+quality = { depends-on = ["lint", "type-check"] }
+test = "pytest tests/ --cov=refactor --cov-report=term-missing"
+security = "bandit -c pyproject.toml -r refactor/"
+pre-commit-install = "pre-commit install"
+pre-commit-run = "pre-commit run --all-files"
+
+[environments]
+default = { solve-group = "default" }
+ci = { features = ["ci"], solve-group = "default" }
