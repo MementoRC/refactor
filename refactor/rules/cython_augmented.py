@@ -124,9 +124,7 @@ class ConvertFunctionAnnotations(Rule):
     ``@cython.returns(...)`` decorators as appropriate.
     """
 
-    def match(
-        self, node: ast.AST
-    ) -> Replace | None:
+    def match(self, node: ast.AST) -> Replace | None:
         assert isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         assert not _inside_cython_compiled_guard(node, self.context.source)
 
@@ -141,9 +139,7 @@ class ConvertFunctionAnnotations(Rule):
                 params_to_convert.append(arg)
 
         # Check return annotation
-        return_convertible = (
-            node.returns is not None and _is_bare_type_name(node.returns)
-        )
+        return_convertible = node.returns is not None and _is_bare_type_name(node.returns)
 
         # Only proceed if there is something to convert
         assert params_to_convert or return_convertible
@@ -221,7 +217,7 @@ class AddCythonMarkerDecorator(Rule):
         preceding_line = lines[preceding_lineno].strip()
         assert preceding_line.startswith("# cython:")
 
-        marker_value = preceding_line[len("# cython:"):].strip()
+        marker_value = preceding_line[len("# cython:") :].strip()
         assert marker_value in _SUPPORTED_MARKERS
 
         # Idempotency guard: if the first existing decorator is already
@@ -237,9 +233,7 @@ class AddCythonMarkerDecorator(Rule):
                 return None
 
         new_node = deepcopy(node)
-        new_node.decorator_list = [_make_cython_attr(marker_value)] + list(
-            new_node.decorator_list
-        )
+        new_node.decorator_list = [_make_cython_attr(marker_value)] + list(new_node.decorator_list)
         return Replace(node, new_node)
 
 
@@ -335,10 +329,7 @@ def _find_init_method(
 ) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
     """Return the ``__init__`` method of a class, or None."""
     for stmt in class_node.body:
-        if (
-            isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))
-            and stmt.name == "__init__"
-        ):
+        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) and stmt.name == "__init__":
             return stmt
     return None
 
@@ -423,8 +414,7 @@ class DeclareClassAttributes(Rule):
 
         # Build declare statements to insert before __init__
         declare_stmts: list[ast.stmt] = [
-            _make_declare_assign(attr_name, cython_type)
-            for attr_name, cython_type in assignments
+            _make_declare_assign(attr_name, cython_type) for attr_name, cython_type in assignments
         ]
 
         # Find the index of __init__ in the new class body and insert before it

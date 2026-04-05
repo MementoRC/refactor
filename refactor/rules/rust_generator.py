@@ -148,7 +148,9 @@ def _is_none(node: ast.expr) -> bool:
     return False
 
 
-def _extract_docstring(node: Union[ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef]) -> str | None:
+def _extract_docstring(
+    node: Union[ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef],
+) -> str | None:
     """Extract docstring from a function or class node."""
     if (
         node.body
@@ -253,7 +255,11 @@ def _extract_init_fields(cls: ast.ClassDef) -> list[tuple[str, str]]:
                 target = stmt.targets[0]
                 annotation = None
 
-            if not (isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == "self"):
+            if not (
+                isinstance(target, ast.Attribute)
+                and isinstance(target.value, ast.Name)
+                and target.value.id == "self"
+            ):
                 continue
 
             field_name = target.attr

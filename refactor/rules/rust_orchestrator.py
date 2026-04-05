@@ -4,7 +4,6 @@ import ast
 import textwrap
 from dataclasses import dataclass, field
 
-
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
@@ -285,7 +284,7 @@ def generate_python_wrapper(source: str, module_name: str) -> str:
     lines.append(f'"""Python wrapper for {module_name} with Rust acceleration.')
     lines.append("")
     lines.append("Imports from the compiled Rust extension when available,")
-    lines.append('falls back to pure Python implementation otherwise.')
+    lines.append("falls back to pure Python implementation otherwise.")
     lines.append('"""')
     lines.append("try:")
     lines.append(f"    from ._{module_name}_rs import {import_names}")

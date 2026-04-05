@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import textwrap
 
-import pytest
-
 from refactor import Session
 from refactor.rules.cython_augmented import (
     ALL_RULES,
@@ -13,7 +11,6 @@ from refactor.rules.cython_augmented import (
     ConvertTypeToCython,
     DeclareClassAttributes,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -22,10 +22,7 @@ def _is_unittest_base(node: ast.expr, unittest_names: set[str]) -> bool:
     """Return True if the expression is a known unittest base class reference."""
     if isinstance(node, ast.Attribute):
         # unittest.TestCase style
-        return (
-            isinstance(node.value, ast.Name)
-            and node.value.id == _UNITTEST_MODULE
-        )
+        return isinstance(node.value, ast.Name) and node.value.id == _UNITTEST_MODULE
     if isinstance(node, ast.Name):
         return node.id in unittest_names
     return False
@@ -68,16 +65,11 @@ class RemoveUnittestInheritance(Rule):
         unittest_names = _get_unittest_names_from_imports(tree)
 
         # Check if any base is a unittest base
-        has_unittest_base = any(
-            _is_unittest_base(base, unittest_names) for base in node.bases
-        )
+        has_unittest_base = any(_is_unittest_base(base, unittest_names) for base in node.bases)
         assert has_unittest_base
 
         # Filter out unittest bases, keeping non-unittest ones
-        new_bases = [
-            base for base in node.bases
-            if not _is_unittest_base(base, unittest_names)
-        ]
+        new_bases = [base for base in node.bases if not _is_unittest_base(base, unittest_names)]
 
         # Only transform if something actually changed
         assert len(new_bases) != len(node.bases)
@@ -149,9 +141,7 @@ class RemoveUnittestImport(Rule):
         return None
 
 
-def _unittest_is_still_used_excluding_import(
-    tree: ast.Module, import_node: ast.Import
-) -> bool:
+def _unittest_is_still_used_excluding_import(tree: ast.Module, import_node: ast.Import) -> bool:
     """Return True if 'unittest' is used in any node other than the given import."""
     for node in ast.walk(tree):
         if node is import_node:
@@ -175,9 +165,7 @@ class RemoveTestWrapperImport(Rule):
         assert node.module == _WRAPPER_MODULE
 
         # Check that this import includes IsolatedAsyncioWrapperTestCase
-        wrapper_aliases = [
-            alias for alias in node.names if alias.name == _WRAPPER_CLASS
-        ]
+        wrapper_aliases = [alias for alias in node.names if alias.name == _WRAPPER_CLASS]
         assert len(wrapper_aliases) > 0
 
         tree = self.context.tree
@@ -225,32 +213,42 @@ def _extract_msg(call: ast.Call, msg_index: int) -> ast.expr | None:
 def _conv_equal(call: ast.Call) -> ast.expr:
     return ast.Compare(left=call.args[0], ops=[ast.Eq()], comparators=[call.args[1]])
 
+
 def _conv_not_equal(call: ast.Call) -> ast.expr:
     return ast.Compare(left=call.args[0], ops=[ast.NotEq()], comparators=[call.args[1]])
+
 
 def _conv_true(call: ast.Call) -> ast.expr:
     return call.args[0]
 
+
 def _conv_false(call: ast.Call) -> ast.expr:
     return ast.UnaryOp(op=ast.Not(), operand=call.args[0])
+
 
 def _conv_is(call: ast.Call) -> ast.expr:
     return ast.Compare(left=call.args[0], ops=[ast.Is()], comparators=[call.args[1]])
 
+
 def _conv_is_not(call: ast.Call) -> ast.expr:
     return ast.Compare(left=call.args[0], ops=[ast.IsNot()], comparators=[call.args[1]])
+
 
 def _conv_is_none(call: ast.Call) -> ast.expr:
     return ast.Compare(left=call.args[0], ops=[ast.Is()], comparators=[ast.Constant(value=None)])
 
+
 def _conv_is_not_none(call: ast.Call) -> ast.expr:
     return ast.Compare(left=call.args[0], ops=[ast.IsNot()], comparators=[ast.Constant(value=None)])
+
 
 def _conv_in(call: ast.Call) -> ast.expr:
     return ast.Compare(left=call.args[0], ops=[ast.In()], comparators=[call.args[1]])
 
+
 def _conv_not_in(call: ast.Call) -> ast.expr:
     return ast.Compare(left=call.args[0], ops=[ast.NotIn()], comparators=[call.args[1]])
+
 
 def _conv_is_instance(call: ast.Call) -> ast.expr:
     return ast.Call(
@@ -259,25 +257,32 @@ def _conv_is_instance(call: ast.Call) -> ast.expr:
         keywords=[],
     )
 
+
 def _conv_almost_equal(call: ast.Call) -> ast.expr:
     approx = _make_attr_call("pytest", "approx", [call.args[1]])
     return ast.Compare(left=call.args[0], ops=[ast.Eq()], comparators=[approx])
 
+
 def _conv_greater(call: ast.Call) -> ast.expr:
     return ast.Compare(left=call.args[0], ops=[ast.Gt()], comparators=[call.args[1]])
+
 
 def _conv_greater_equal(call: ast.Call) -> ast.expr:
     return ast.Compare(left=call.args[0], ops=[ast.GtE()], comparators=[call.args[1]])
 
+
 def _conv_less(call: ast.Call) -> ast.expr:
     return ast.Compare(left=call.args[0], ops=[ast.Lt()], comparators=[call.args[1]])
+
 
 def _conv_less_equal(call: ast.Call) -> ast.expr:
     return ast.Compare(left=call.args[0], ops=[ast.LtE()], comparators=[call.args[1]])
 
+
 def _conv_regex(call: ast.Call) -> ast.expr:
     # assertRegex(s, r) -> re.search(r, s)  — note argument order swap
     return _make_attr_call("re", "search", [call.args[1], call.args[0]])
+
 
 def _conv_count_equal(call: ast.Call) -> ast.expr:
     sorted_a = _make_attr_call("", "sorted", [call.args[0]])
@@ -288,24 +293,24 @@ def _conv_count_equal(call: ast.Call) -> ast.expr:
 
 # Maps method name → (converter_fn, msg_arg_index)
 _ASSERT_CONVERTERS: dict[str, tuple[object, int]] = {
-    "assertEqual":        (_conv_equal,         2),
-    "assertNotEqual":     (_conv_not_equal,      2),
-    "assertTrue":         (_conv_true,           1),
-    "assertFalse":        (_conv_false,          1),
-    "assertIs":           (_conv_is,             2),
-    "assertIsNot":        (_conv_is_not,         2),
-    "assertIsNone":       (_conv_is_none,        1),
-    "assertIsNotNone":    (_conv_is_not_none,    1),
-    "assertIn":           (_conv_in,             2),
-    "assertNotIn":        (_conv_not_in,         2),
-    "assertIsInstance":   (_conv_is_instance,    2),
-    "assertAlmostEqual":  (_conv_almost_equal,   2),
-    "assertGreater":      (_conv_greater,        2),
-    "assertGreaterEqual": (_conv_greater_equal,  2),
-    "assertLess":         (_conv_less,           2),
-    "assertLessEqual":    (_conv_less_equal,     2),
-    "assertRegex":        (_conv_regex,          2),
-    "assertCountEqual":   (_conv_count_equal,    2),
+    "assertEqual": (_conv_equal, 2),
+    "assertNotEqual": (_conv_not_equal, 2),
+    "assertTrue": (_conv_true, 1),
+    "assertFalse": (_conv_false, 1),
+    "assertIs": (_conv_is, 2),
+    "assertIsNot": (_conv_is_not, 2),
+    "assertIsNone": (_conv_is_none, 1),
+    "assertIsNotNone": (_conv_is_not_none, 1),
+    "assertIn": (_conv_in, 2),
+    "assertNotIn": (_conv_not_in, 2),
+    "assertIsInstance": (_conv_is_instance, 2),
+    "assertAlmostEqual": (_conv_almost_equal, 2),
+    "assertGreater": (_conv_greater, 2),
+    "assertGreaterEqual": (_conv_greater_equal, 2),
+    "assertLess": (_conv_less, 2),
+    "assertLessEqual": (_conv_less_equal, 2),
+    "assertRegex": (_conv_regex, 2),
+    "assertCountEqual": (_conv_count_equal, 2),
 }
 
 
@@ -347,6 +352,7 @@ class ConvertAssertions(Rule):
 # ConvertSetUpTearDown
 # ---------------------------------------------------------------------------
 
+
 def _make_fixture_decorator(autouse: bool = True) -> ast.expr:
     """Create @pytest.fixture(autouse=True) decorator node."""
     return ast.Call(
@@ -356,9 +362,7 @@ def _make_fixture_decorator(autouse: bool = True) -> ast.expr:
             ctx=ast.Load(),
         ),
         args=[],
-        keywords=[
-            ast.keyword(arg="autouse", value=ast.Constant(value=autouse))
-        ],
+        keywords=[ast.keyword(arg="autouse", value=ast.Constant(value=autouse))],
     )
 
 
@@ -430,6 +434,7 @@ class ConvertSetUpTearDown(Rule):
 # ConvertAssertRaises
 # ---------------------------------------------------------------------------
 
+
 class ConvertAssertRaises(Rule):
     """Convert self.assertRaises(...) context managers to pytest.raises(...).
 
@@ -486,6 +491,7 @@ class ConvertAssertRaises(Rule):
 # ConvertUnittestDecorators
 # ---------------------------------------------------------------------------
 
+
 def _build_pytest_mark_skip(args: list[ast.expr]) -> ast.expr:
     """Build @pytest.mark.skip(reason=<reason>) from @unittest.skip(<reason>)."""
     reason_arg = args[0] if args else ast.Constant(value="")
@@ -504,9 +510,7 @@ def _build_pytest_mark_skip(args: list[ast.expr]) -> ast.expr:
     )
 
 
-def _build_pytest_mark_skipif(
-    condition: ast.expr, reason: ast.expr
-) -> ast.expr:
+def _build_pytest_mark_skipif(condition: ast.expr, reason: ast.expr) -> ast.expr:
     """Build @pytest.mark.skipif(condition, reason=<reason>)."""
     return ast.Call(
         func=ast.Attribute(
@@ -602,4 +606,5 @@ ALL_RULES = [
 
 if __name__ == "__main__":
     import refactor
+
     refactor.run(ALL_RULES)

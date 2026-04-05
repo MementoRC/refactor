@@ -312,6 +312,7 @@ def test_nested_class_definition():
 # ConvertAssertions tests
 # ---------------------------------------------------------------------------
 
+
 def _assert(source: str) -> str:
     """Run only ConvertAssertions on a single dedented statement."""
     return _run(ConvertAssertions, source=textwrap.dedent(source))
@@ -462,6 +463,7 @@ def test_no_change_non_assert_method():
 # ConvertSetUpTearDown tests
 # ---------------------------------------------------------------------------
 
+
 def _setup(source: str) -> str:
     """Run only ConvertSetUpTearDown on a dedented source."""
     return _run(ConvertSetUpTearDown, source=textwrap.dedent(source))
@@ -529,6 +531,7 @@ def test_remove_maxdiff():
 # ConvertAssertRaises tests
 # ---------------------------------------------------------------------------
 
+
 def _raises(source: str) -> str:
     """Run only ConvertAssertRaises on a dedented source."""
     return _run(ConvertAssertRaises, source=textwrap.dedent(source))
@@ -560,6 +563,7 @@ def test_convert_assert_raises_with_as():
 # ConvertUnittestDecorators tests
 # ---------------------------------------------------------------------------
 
+
 def _decorators(source: str) -> str:
     """Run only ConvertUnittestDecorators on a dedented source."""
     return _run(ConvertUnittestDecorators, source=textwrap.dedent(source))
@@ -572,7 +576,7 @@ def test_convert_skip_decorator():
             pass
         """
     result = _decorators(source)
-    assert '@pytest.mark.skip(reason=' in result
+    assert "@pytest.mark.skip(reason=" in result
     assert '"not ready"' in result
     assert "@unittest.skip" not in result
 

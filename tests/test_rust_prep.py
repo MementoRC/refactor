@@ -9,10 +9,10 @@ from refactor.rules.rust_prep import (
     InferTypeAnnotations,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def run(rule_cls, source: str) -> str:
     return Session([rule_cls]).run(textwrap.dedent(source))
@@ -22,14 +22,15 @@ def run(rule_cls, source: str) -> str:
 # FlagDynamicPatterns
 # ---------------------------------------------------------------------------
 
+
 def test_flag_getattr():
     source = """\
     def fetch(obj, name):
         return getattr(obj, name)
     """
     result = run(FlagDynamicPatterns, source)
-    assert '_needs_manual_rust_conversion' in result
-    assert 'dynamic attribute access' in result
+    assert "_needs_manual_rust_conversion" in result
+    assert "dynamic attribute access" in result
 
 
 def test_flag_eval():
@@ -38,8 +39,8 @@ def test_flag_eval():
         return eval(expr)
     """
     result = run(FlagDynamicPatterns, source)
-    assert '_needs_manual_rust_conversion' in result
-    assert 'dynamic code evaluation' in result
+    assert "_needs_manual_rust_conversion" in result
+    assert "dynamic code evaluation" in result
 
 
 def test_flag_kwargs():
@@ -48,8 +49,8 @@ def test_flag_kwargs():
         pass
     """
     result = run(FlagDynamicPatterns, source)
-    assert '_needs_manual_rust_conversion' in result
-    assert 'dynamic keyword arguments' in result
+    assert "_needs_manual_rust_conversion" in result
+    assert "dynamic keyword arguments" in result
 
 
 def test_flag_multiple_patterns():
@@ -58,12 +59,12 @@ def test_flag_multiple_patterns():
         setattr(args[0], 'x', eval('1'))
     """
     result = run(FlagDynamicPatterns, source)
-    assert '_needs_manual_rust_conversion' in result
+    assert "_needs_manual_rust_conversion" in result
     # Multiple reasons should appear in the string
-    assert 'dynamic attribute setting' in result
-    assert 'dynamic code evaluation' in result
-    assert 'dynamic keyword arguments' in result
-    assert 'variadic arguments' in result
+    assert "dynamic attribute setting" in result
+    assert "dynamic code evaluation" in result
+    assert "dynamic keyword arguments" in result
+    assert "variadic arguments" in result
 
 
 def test_no_flag_clean_function():
@@ -83,12 +84,13 @@ def test_no_double_flag():
     """
     result = run(FlagDynamicPatterns, source)
     # Source unchanged — no second decorator added
-    assert result.count('_needs_manual_rust_conversion') == 1
+    assert result.count("_needs_manual_rust_conversion") == 1
 
 
 # ---------------------------------------------------------------------------
 # InferTypeAnnotations
 # ---------------------------------------------------------------------------
+
 
 def test_infer_int_default():
     source = """\
@@ -97,8 +99,8 @@ def test_infer_int_default():
     """
     result = run(InferTypeAnnotations, source)
     # ast.unparse renders annotated args as "x: int=0" (no space around =)
-    assert 'x: int' in result
-    assert '0' in result
+    assert "x: int" in result
+    assert "0" in result
 
 
 def test_infer_float_default():
@@ -107,8 +109,8 @@ def test_infer_float_default():
         pass
     """
     result = run(InferTypeAnnotations, source)
-    assert 'x: float' in result
-    assert '1.5' in result
+    assert "x: float" in result
+    assert "1.5" in result
 
 
 def test_infer_str_default():
@@ -117,8 +119,8 @@ def test_infer_str_default():
         pass
     """
     result = run(InferTypeAnnotations, source)
-    assert 'x: str' in result
-    assert 'hi' in result
+    assert "x: str" in result
+    assert "hi" in result
 
 
 def test_infer_bool_default():
@@ -127,8 +129,8 @@ def test_infer_bool_default():
         pass
     """
     result = run(InferTypeAnnotations, source)
-    assert 'x: bool' in result
-    assert 'True' in result
+    assert "x: bool" in result
+    assert "True" in result
 
 
 def test_infer_list_default():
@@ -138,7 +140,7 @@ def test_infer_list_default():
         pass
     """
     result = run(InferTypeAnnotations, source)
-    assert 'x: list' in result
+    assert "x: list" in result
 
 
 def test_infer_none_return():
@@ -147,7 +149,7 @@ def test_infer_none_return():
         print(x)
     """
     result = run(InferTypeAnnotations, source)
-    assert '-> None' in result
+    assert "-> None" in result
 
 
 def test_skip_already_annotated():
@@ -157,8 +159,8 @@ def test_skip_already_annotated():
     """
     result = run(InferTypeAnnotations, source)
     # int annotation already present; only change is -> None return annotation
-    assert 'x: int' in result
-    assert '-> None' in result
+    assert "x: int" in result
+    assert "-> None" in result
 
 
 def test_skip_none_default():
@@ -168,8 +170,8 @@ def test_skip_none_default():
     """
     # None default is ambiguous — should not get annotated, but -> None added
     result = run(InferTypeAnnotations, source)
-    assert 'x: ' not in result  # no annotation on x
-    assert '-> None' in result
+    assert "x: " not in result  # no annotation on x
+    assert "-> None" in result
 
 
 def test_infer_bool_not_int():
@@ -179,13 +181,14 @@ def test_infer_bool_not_int():
         pass
     """
     result = run(InferTypeAnnotations, source)
-    assert 'flag: bool' in result
-    assert 'flag: int' not in result
+    assert "flag: bool" in result
+    assert "flag: int" not in result
 
 
 # ---------------------------------------------------------------------------
 # EnsureAnnotationCompleteness
 # ---------------------------------------------------------------------------
+
 
 def test_flag_incomplete_annotations():
     source = """\
@@ -193,7 +196,7 @@ def test_flag_incomplete_annotations():
         return []
     """
     result = run(EnsureAnnotationCompleteness, source)
-    assert '_needs_type_annotation' in result
+    assert "_needs_type_annotation" in result
     assert "'data'" in result
     assert "'threshold'" in result
 
@@ -223,12 +226,13 @@ def test_no_double_flag_completeness():
         return []
     """
     result = run(EnsureAnnotationCompleteness, source)
-    assert result.count('_needs_type_annotation') == 1
+    assert result.count("_needs_type_annotation") == 1
 
 
 # ---------------------------------------------------------------------------
 # Combined
 # ---------------------------------------------------------------------------
+
 
 def test_all_rules_combined():
     source = """\
@@ -250,11 +254,13 @@ def test_all_rules_combined():
     result = Session([EnsureAnnotationCompleteness]).run(intermediate)
 
     # clean function untouched by FlagDynamicPatterns
-    assert '_needs_manual_rust_conversion' not in result.split('def clean')[0] or True  # just check eval flagged
+    assert (
+        "_needs_manual_rust_conversion" not in result.split("def clean")[0] or True
+    )  # just check eval flagged
     # eval flagged
-    assert '_needs_manual_rust_conversion' in result
+    assert "_needs_manual_rust_conversion" in result
     # infer worked (ast.unparse omits space around = in annotated defaults)
-    assert 'count: int' in result
-    assert 'rate: float' in result
+    assert "count: int" in result
+    assert "rate: float" in result
     # incomplete annotations flagged
-    assert '_needs_type_annotation' in result
+    assert "_needs_type_annotation" in result

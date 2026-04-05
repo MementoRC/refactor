@@ -7,13 +7,14 @@ from pathlib import Path
 from refactor.rules.rust_generator import (
     generate_cargo_toml,
     generate_module,
-    generate_pyfunction,
     generate_pyclass,
+    generate_pyfunction,
 )
 
 # ---------------------------------------------------------------------------
 # Minimal inline wrapper generator (used if rust_orchestrator is unavailable)
 # ---------------------------------------------------------------------------
+
 
 def _generate_python_wrapper_inline(source: str, module_name: str) -> str:
     """Minimal Python wrapper that tries the Rust extension, falls back to pure Python."""
@@ -38,6 +39,7 @@ def _try_import_wrapper(source: str, module_name: str) -> str:
     """Import generate_python_wrapper from rust_orchestrator if available."""
     try:
         from refactor.rules.rust_orchestrator import generate_python_wrapper  # type: ignore[import]
+
         return generate_python_wrapper(source, module_name)
     except ImportError:
         return _generate_python_wrapper_inline(source, module_name)
@@ -46,6 +48,7 @@ def _try_import_wrapper(source: str, module_name: str) -> str:
 # ---------------------------------------------------------------------------
 # Helper: detect dynamic patterns in a function/method
 # ---------------------------------------------------------------------------
+
 
 def _has_dynamic_patterns(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
     """Return a list of dynamic pattern descriptions found in the function."""
@@ -57,7 +60,12 @@ def _has_dynamic_patterns(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[
     # Detect getattr / setattr / eval / exec calls
     for node in ast.walk(func):
         if isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Name) and node.func.id in ("getattr", "setattr", "eval", "exec"):
+            if isinstance(node.func, ast.Name) and node.func.id in (
+                "getattr",
+                "setattr",
+                "eval",
+                "exec",
+            ):
                 issues.append(f"`{node.func.id}()` call (dynamic attribute access)")
                 break
     return issues
@@ -68,7 +76,9 @@ def _body_complexity_notes(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list
     notes: list[str] = []
     body = func.body
     # Skip pure docstring bodies
-    effective = [s for s in body if not (isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant))]
+    effective = [
+        s for s in body if not (isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant))
+    ]
 
     if len(effective) == 0:
         notes.append("Empty body — implement as no-op or return default value")
@@ -92,7 +102,10 @@ def _body_complexity_notes(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list
         notes.append("Contains exception handling — map to `Result`/`PyErr` in Rust")
 
     # Check for comprehensions
-    has_comp = any(isinstance(s, (ast.ListComp, ast.DictComp, ast.SetComp, ast.GeneratorExp)) for s in ast.walk(func))
+    has_comp = any(
+        isinstance(s, (ast.ListComp, ast.DictComp, ast.SetComp, ast.GeneratorExp))
+        for s in ast.walk(func)
+    )
     if has_comp:
         notes.append("Contains comprehension — translate to `.iter().map().collect()`")
 
@@ -133,6 +146,7 @@ def _type_reference_table() -> str:
 # Component 1: AgentPromptGenerator
 # ---------------------------------------------------------------------------
 
+
 def generate_implementation_prompt(source: str, module_name: str) -> str:
     """Generate a detailed prompt for Claude to implement Rust logic."""
     tree = ast.parse(source)
@@ -151,10 +165,7 @@ def generate_implementation_prompt(source: str, module_name: str) -> str:
     warnings: list[str] = []
 
     # Functions section
-    func_nodes = [
-        n for n in tree.body
-        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
-    ]
+    func_nodes = [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
     if func_nodes:
         sections.append("## Functions to Implement\n")
         for func in func_nodes:
@@ -195,14 +206,16 @@ def generate_implementation_prompt(source: str, module_name: str) -> str:
 
             # Collect fields and methods
             from refactor.rules.rust_generator import _extract_init_fields  # noqa: PLC0415
+
             fields = _extract_init_fields(cls)
             field_str = ", ".join(f"{n}: {t}" for n, t in fields) if fields else "(none detected)"
             method_names = [
-                n.name for n in cls.body
-                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                n.name for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
             ]
             sections.append(f"**Fields:** {field_str}")
-            sections.append(f"**Methods:** {', '.join(method_names) if method_names else '(none)'}\n")
+            sections.append(
+                f"**Methods:** {', '.join(method_names) if method_names else '(none)'}\n"
+            )
 
             py_src = ast.get_source_segment(source, cls) or "(source unavailable)"
             sections.append("**Original Python:**")
@@ -234,6 +247,7 @@ def generate_implementation_prompt(source: str, module_name: str) -> str:
 # ---------------------------------------------------------------------------
 # Component 2: ProjectScaffolder
 # ---------------------------------------------------------------------------
+
 
 def _generate_readme(module_name: str) -> str:
     return textwrap.dedent(f"""\

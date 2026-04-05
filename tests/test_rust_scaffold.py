@@ -2,14 +2,11 @@ from __future__ import annotations
 
 import textwrap
 
-import pytest
-
 from refactor.rules.rust_scaffold import (
     generate_implementation_prompt,
     scaffold_rust_project,
     write_scaffold,
 )
-
 
 # ---------------------------------------------------------------------------
 # generate_implementation_prompt

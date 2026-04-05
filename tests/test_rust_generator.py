@@ -3,8 +3,6 @@ from __future__ import annotations
 import ast
 import textwrap
 
-import pytest
-
 from refactor.rules.rust_generator import (
     generate_cargo_toml,
     generate_module,
@@ -12,7 +10,6 @@ from refactor.rules.rust_generator import (
     generate_pyfunction,
     python_type_to_rust,
 )
-
 
 # ---------------------------------------------------------------------------
 # python_type_to_rust
@@ -371,7 +368,7 @@ def test_generate_cargo_toml_edition():
 
 def test_generate_cargo_toml_lib_name():
     result = generate_cargo_toml("my_lib")
-    assert '[lib]' in result
+    assert "[lib]" in result
     assert 'name = "my_lib"' in result
 
 

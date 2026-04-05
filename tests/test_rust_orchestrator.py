@@ -2,14 +2,11 @@ from __future__ import annotations
 
 import textwrap
 
-import pytest
-
 from refactor.rules.rust_orchestrator import (
     ModuleAnalysis,
     analyze_module,
     generate_python_wrapper,
 )
-
 
 # ===========================================================================
 # ModuleAnalyzer tests
@@ -286,8 +283,10 @@ def test_wrapper_rust_flag_set_true_on_success():
     """_RUST_AVAILABLE = True is inside the try block."""
     wrapper = generate_python_wrapper(_SAMPLE_SOURCE, "mymod")
     lines = wrapper.splitlines()
-    try_idx = next(i for i, l in enumerate(lines) if l.strip() == "try:")
-    except_idx = next(i for i, l in enumerate(lines) if l.strip().startswith("except ImportError"))
+    try_idx = next(i for i, line in enumerate(lines) if line.strip() == "try:")
+    except_idx = next(
+        i for i, line in enumerate(lines) if line.strip().startswith("except ImportError")
+    )
     try_block = "\n".join(lines[try_idx:except_idx])
     assert "_RUST_AVAILABLE = True" in try_block
 
@@ -296,7 +295,9 @@ def test_wrapper_rust_flag_set_false_on_failure():
     """_RUST_AVAILABLE = False is inside the except block."""
     wrapper = generate_python_wrapper(_SAMPLE_SOURCE, "mymod")
     lines = wrapper.splitlines()
-    except_idx = next(i for i, l in enumerate(lines) if l.strip().startswith("except ImportError"))
+    except_idx = next(
+        i for i, line in enumerate(lines) if line.strip().startswith("except ImportError")
+    )
     # Grab a few lines after except
-    except_block = "\n".join(lines[except_idx: except_idx + 5])
+    except_block = "\n".join(lines[except_idx : except_idx + 5])
     assert "_RUST_AVAILABLE = False" in except_block

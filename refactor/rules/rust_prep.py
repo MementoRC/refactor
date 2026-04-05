@@ -16,14 +16,14 @@ class FlagDynamicPatterns(Rule):
     """
 
     DYNAMIC_CALLS: dict[str, str] = {
-        'getattr': 'dynamic attribute access',
-        'setattr': 'dynamic attribute setting',
-        'delattr': 'dynamic attribute deletion',
-        'exec': 'dynamic code execution',
-        'eval': 'dynamic code evaluation',
-        'globals': 'runtime introspection',
-        'locals': 'runtime introspection',
-        '__import__': 'dynamic import',
+        "getattr": "dynamic attribute access",
+        "setattr": "dynamic attribute setting",
+        "delattr": "dynamic attribute deletion",
+        "exec": "dynamic code execution",
+        "eval": "dynamic code evaluation",
+        "globals": "runtime introspection",
+        "locals": "runtime introspection",
+        "__import__": "dynamic import",
     }
 
     def match(self, node: ast.AST) -> Replace | None:
@@ -33,7 +33,7 @@ class FlagDynamicPatterns(Rule):
         assert not any(
             isinstance(d, ast.Call)
             and isinstance(d.func, ast.Name)
-            and d.func.id == '_needs_manual_rust_conversion'
+            and d.func.id == "_needs_manual_rust_conversion"
             for d in node.decorator_list
         )
 
@@ -41,9 +41,9 @@ class FlagDynamicPatterns(Rule):
 
         # Check signature-level patterns
         if node.args.kwarg:
-            reasons.add('dynamic keyword arguments')
+            reasons.add("dynamic keyword arguments")
         if node.args.vararg:
-            reasons.add('variadic arguments')
+            reasons.add("variadic arguments")
 
         # Walk entire function (including body) for dynamic calls
         for child in ast.walk(node):
@@ -57,9 +57,9 @@ class FlagDynamicPatterns(Rule):
         assert reasons  # nothing flagged → no match
 
         new_node = copy.deepcopy(node)
-        reason_str = ', '.join(sorted(reasons))
+        reason_str = ", ".join(sorted(reasons))
         decorator = ast.Call(
-            func=ast.Name(id='_needs_manual_rust_conversion', ctx=ast.Load()),
+            func=ast.Name(id="_needs_manual_rust_conversion", ctx=ast.Load()),
             args=[ast.Constant(value=reason_str)],
             keywords=[],
         )
@@ -72,23 +72,23 @@ def _type_name_for_default(default: ast.expr) -> str | None:
     if isinstance(default, ast.Constant):
         # bool MUST be checked before int (bool is a subclass of int)
         if isinstance(default.value, bool):
-            return 'bool'
+            return "bool"
         if isinstance(default.value, int):
-            return 'int'
+            return "int"
         if isinstance(default.value, float):
-            return 'float'
+            return "float"
         if isinstance(default.value, str):
-            return 'str'
+            return "str"
         # None or other constants — skip
         return None
     if isinstance(default, ast.List):
-        return 'list'
+        return "list"
     if isinstance(default, ast.Dict):
-        return 'dict'
+        return "dict"
     if isinstance(default, ast.Tuple):
-        return 'tuple'
+        return "tuple"
     if isinstance(default, ast.Set):
-        return 'set'
+        return "set"
     return None
 
 
@@ -113,7 +113,7 @@ class InferTypeAnnotations(Rule):
             arg_idx = offset + i
             arg = args.args[arg_idx]
             # Skip self/cls and already-annotated params
-            if arg.arg in ('self', 'cls'):
+            if arg.arg in ("self", "cls"):
                 continue
             if arg.annotation is not None:
                 continue
@@ -137,9 +137,7 @@ class InferTypeAnnotations(Rule):
         new_node = copy.deepcopy(node)
 
         for arg_idx, type_name in new_annotations.items():
-            new_node.args.args[arg_idx].annotation = ast.Name(
-                id=type_name, ctx=ast.Load()
-            )
+            new_node.args.args[arg_idx].annotation = ast.Name(id=type_name, ctx=ast.Load())
 
         if add_none_return:
             new_node.returns = ast.Constant(value=None)
@@ -162,13 +160,13 @@ class EnsureAnnotationCompleteness(Rule):
         assert not any(
             isinstance(d, ast.Call)
             and isinstance(d.func, ast.Name)
-            and d.func.id == '_needs_type_annotation'
+            and d.func.id == "_needs_type_annotation"
             for d in node.decorator_list
         )
 
         args = node.args
         # Collect all params (excluding self/cls)
-        params = [a for a in args.args if a.arg not in ('self', 'cls')]
+        params = [a for a in args.args if a.arg not in ("self", "cls")]
         # Also consider *args and **kwargs
         if args.vararg:
             params.append(args.vararg)
@@ -187,7 +185,7 @@ class EnsureAnnotationCompleteness(Rule):
 
         new_node = copy.deepcopy(node)
         decorator = ast.Call(
-            func=ast.Name(id='_needs_type_annotation', ctx=ast.Load()),
+            func=ast.Name(id="_needs_type_annotation", ctx=ast.Load()),
             args=[ast.Constant(value=a.arg) for a in unannotated],
             keywords=[],
         )
