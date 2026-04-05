@@ -25,5 +25,4 @@ pre-commit-install = "pre-commit install"
 pre-commit-run = "pre-commit run --all-files"
 
 [environments]
-default = { solve-group = "default" }
-ci = { features = ["ci"], solve-group = "default" }
+ci = { features = ["ci"], no-default-feature = true }
