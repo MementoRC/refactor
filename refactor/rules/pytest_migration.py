@@ -52,7 +52,9 @@ class RemoveUnittestInheritance(Rule):
     - class Foo(unittest.TestCase): -> class Foo:
     - class Foo(TestCase): -> class Foo:  (when TestCase imported from unittest)
     - class Foo(IsolatedAsyncioWrapperTestCase): -> class Foo:
-    - class Foo(Mixin, TestCase): -> class Foo(Mixin):
+
+    Does NOT modify classes that have non-unittest bases (mixins) remaining
+    after removing unittest bases, to avoid breaking pytest class instantiation.
     """
 
     def match(self, node: ast.AST) -> Replace | None:
@@ -69,33 +71,17 @@ class RemoveUnittestInheritance(Rule):
         assert has_unittest_base
 
         # Filter out unittest bases, keeping non-unittest ones
-        new_bases = [base for base in node.bases if not _is_unittest_base(base, unittest_names)]
+        non_unittest_bases = [
+            base for base in node.bases if not _is_unittest_base(base, unittest_names)
+        ]
 
-        # Only transform if something actually changed
-        assert len(new_bases) != len(node.bases)
+        # Only remove unittest bases when ALL bases are unittest bases (result is bare class).
+        # If non-unittest bases (mixins) remain, keep the class unchanged to avoid
+        # TypeError when pytest tries to instantiate the class.
+        assert len(non_unittest_bases) == 0
 
         new_node = clone(node)
-        new_node.bases = new_bases
-
-        # If non-unittest bases remain (mixins), inject ``__init__ = None``
-        # so pytest can collect the class despite any mixin __init__.
-        # Only add it when the class doesn't already define its own __init__.
-        if new_bases:
-            has_own_init = any(
-                isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and stmt.name == "__init__"
-                for stmt in node.body
-            )
-            if not has_own_init:
-                init_none = ast.Assign(
-                    targets=[ast.Name(id="__init__", ctx=ast.Store())],
-                    value=ast.Constant(value=None),
-                    lineno=0,
-                    col_offset=0,
-                )
-                ast.fix_missing_locations(init_none)
-                new_node.body = [init_none] + new_node.body
-
+        new_node.bases = []
         return Replace(node, new_node)
 
 

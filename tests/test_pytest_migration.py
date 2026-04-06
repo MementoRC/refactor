@@ -86,9 +86,9 @@ def test_multiple_inheritance_keep_mixin():
                 pass
         """
     result = _run(RemoveUnittestInheritance, source=source)
-    # Mixin base retained, __init__ = None injected for pytest collection safety
-    assert "class TestFoo(SomeMixin):" in result
-    assert "__init__ = None" in result
+    # When mixin bases remain, TestCase is also kept to avoid pytest TypeError
+    assert "class TestFoo(SomeMixin, TestCase):" in result
+    assert "__init__ = None" not in result
     assert "def test_something(self):" in result
 
 
@@ -201,17 +201,19 @@ def test_full_file_transformation():
         RemoveTestWrapperImport,
         source=source,
     )
-    # Imports removed
+    # unittest module import removed (TestSimple no longer uses unittest.TestCase)
     assert "import unittest" not in result
-    assert "from unittest import TestCase" not in result
+    # 'from unittest import TestCase' kept because TestMixed still uses TestCase
+    assert "from unittest import TestCase" in result
+    # IsolatedAsyncioWrapperTestCase import removed (TestAsync no longer uses it)
     assert "IsolatedAsyncioWrapperTestCase" not in result
     # Pure TestCase classes become bare classes
     assert "class TestSimple:" in result
     assert "class TestImported:" in result
     assert "class TestAsync:" in result
-    # Mixin class retains mixin base and gets __init__ = None
-    assert "class TestMixed(SomeMixin):" in result
-    assert "__init__ = None" in result
+    # Mixin class is left unchanged (both bases kept) to avoid pytest TypeError
+    assert "class TestMixed(SomeMixin, TestCase):" in result
+    assert "__init__ = None" not in result
 
 
 def test_remove_from_unittest_import_testcase_when_unused():
@@ -275,8 +277,9 @@ def test_multiple_inheritance_wrapper():
             pass
     """)
     result = _run(RemoveUnittestInheritance, RemoveTestWrapperImport, source=source)
-    assert "class TestFoo(SomeMixin):" in result
-    assert "IsolatedAsyncioWrapperTestCase" not in result
+    # When mixin bases remain, IsolatedAsyncioWrapperTestCase is also kept
+    assert "class TestFoo(SomeMixin, IsolatedAsyncioWrapperTestCase):" in result
+    assert "IsolatedAsyncioWrapperTestCase" in result
 
 
 def test_nested_class_definition():
@@ -736,8 +739,8 @@ def test_add_pytest_import_not_added_when_no_pytest_refs():
 # ---------------------------------------------------------------------------
 
 
-def test_mixin_init_override():
-    """When mixin bases remain after TestCase removal, __init__ = None is injected."""
+def test_keep_testcase_when_mixin_present():
+    """When mixin bases remain, the class is NOT modified to avoid pytest TypeError."""
     source = textwrap.dedent("""\
         from unittest import TestCase
 
@@ -748,12 +751,13 @@ def test_mixin_init_override():
 
     result = _run(RemoveUnittestInheritance, source=source)
 
-    assert "class TestFoo(SomeMixin):" in result
-    assert "__init__ = None" in result
+    # Class is left entirely unchanged: both bases kept, no __init__ = None injected
+    assert "class TestFoo(SomeMixin, TestCase):" in result
+    assert "__init__ = None" not in result
 
 
-def test_mixin_init_override_skipped_when_own_init_exists():
-    """When the class already defines __init__, do not inject __init__ = None."""
+def test_keep_testcase_when_mixin_and_own_init_present():
+    """When mixin bases remain (even with own __init__), the class is NOT modified."""
     source = textwrap.dedent("""\
         from unittest import TestCase
 
@@ -767,8 +771,8 @@ def test_mixin_init_override_skipped_when_own_init_exists():
 
     result = _run(RemoveUnittestInheritance, source=source)
 
-    assert "class TestFoo(SomeMixin):" in result
-    # No extra __init__ = None should appear since the class owns __init__
+    # Class is left entirely unchanged
+    assert "class TestFoo(SomeMixin, TestCase):" in result
     assert "__init__ = None" not in result
 
 
