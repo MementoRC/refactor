@@ -315,6 +315,26 @@ def test_convert_assert_equal():
     assert result == "assert a == b\n"
 
 
+def test_convert_assert_equal_true_idiomatic():
+    result = _assert("self.assertEqual(x, True)\n")
+    assert result == "assert x\n"
+
+
+def test_convert_assert_equal_false_idiomatic():
+    result = _assert("self.assertEqual(x, False)\n")
+    assert result == "assert not x\n"
+
+
+def test_convert_assert_equal_none_idiomatic():
+    result = _assert("self.assertEqual(x, None)\n")
+    assert result == "assert x is None\n"
+
+
+def test_convert_assert_not_equal_none_idiomatic():
+    result = _assert("self.assertNotEqual(x, None)\n")
+    assert result == "assert x is not None\n"
+
+
 def test_convert_assert_not_equal():
     result = _assert("self.assertNotEqual(a, b)\n")
     assert result == "assert a != b\n"
