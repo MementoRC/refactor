@@ -217,11 +217,24 @@ def _extract_msg(call: ast.Call, msg_index: int) -> ast.expr | None:
 # Map from assertion method name to a callable that takes the Call node and
 # returns the test expression for ast.Assert.
 def _conv_equal(call: ast.Call) -> ast.expr:
-    return ast.Compare(left=call.args[0], ops=[ast.Eq()], comparators=[call.args[1]])
+    comparator = call.args[1]
+    # Idiomatic forms for assertEqual(x, True/False/None)
+    if isinstance(comparator, ast.Constant):
+        if comparator.value is True:
+            return call.args[0]
+        if comparator.value is False:
+            return ast.UnaryOp(op=ast.Not(), operand=call.args[0])
+        if comparator.value is None:
+            return ast.Compare(left=call.args[0], ops=[ast.Is()], comparators=[comparator])
+    return ast.Compare(left=call.args[0], ops=[ast.Eq()], comparators=[comparator])
 
 
 def _conv_not_equal(call: ast.Call) -> ast.expr:
-    return ast.Compare(left=call.args[0], ops=[ast.NotEq()], comparators=[call.args[1]])
+    comparator = call.args[1]
+    # Idiomatic form for assertNotEqual(x, None)
+    if isinstance(comparator, ast.Constant) and comparator.value is None:
+        return ast.Compare(left=call.args[0], ops=[ast.IsNot()], comparators=[comparator])
+    return ast.Compare(left=call.args[0], ops=[ast.NotEq()], comparators=[comparator])
 
 
 def _conv_true(call: ast.Call) -> ast.expr:
