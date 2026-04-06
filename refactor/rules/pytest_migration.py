@@ -387,10 +387,14 @@ class ConvertSetUpTearDown(Rule):
     _TEARDOWN_NAMES = frozenset({"tearDown", "asyncTearDown"})
 
     def match(self, node: ast.AST) -> Replace | Erase | None:
-        # --- Handle super().setUp() removal ---
+        # --- Handle super().setUp() / super().tearDown() / await super().asyncSetUp() etc. ---
         if isinstance(node, ast.Expr):
-            assert isinstance(node.value, ast.Call)
-            call = node.value
+            inner_value = node.value
+            # Unwrap await if present: `await super().asyncSetUp()`
+            if isinstance(inner_value, ast.Await):
+                inner_value = inner_value.value
+            assert isinstance(inner_value, ast.Call)
+            call = inner_value
             assert isinstance(call.func, ast.Attribute)
             assert call.func.attr in ("setUp", "asyncSetUp", "tearDown", "asyncTearDown")
             assert isinstance(call.func.value, ast.Call)
@@ -490,6 +494,31 @@ class ConvertAssertRaises(Rule):
         new_node = clone(node)
         new_node.items = new_items
         ast.fix_missing_locations(new_node)
+        return Replace(node, new_node)
+
+
+# ---------------------------------------------------------------------------
+# ConvertExceptionToValue
+# ---------------------------------------------------------------------------
+
+
+class ConvertExceptionToValue(Rule):
+    """Convert cm.exception -> cm.value after pytest.raises context managers.
+
+    When assertRaises is converted to pytest.raises, the captured exception
+    is accessed via .value (not .exception).
+
+    Example:
+        cm.exception   ->   cm.value
+    """
+
+    def match(self, node: ast.AST) -> Replace | None:
+        assert isinstance(node, ast.Attribute)
+        assert node.attr == "exception"
+        assert isinstance(node.value, ast.Name)
+
+        new_node = clone(node)
+        new_node.attr = "value"
         return Replace(node, new_node)
 
 
@@ -671,6 +700,7 @@ ALL_RULES = [
     ConvertAssertions,
     ConvertSetUpTearDown,
     ConvertAssertRaises,
+    ConvertExceptionToValue,
     ConvertUnittestDecorators,
     AddPytestImport,  # Must be last: adds import pytest after all pytest refs are created
 ]

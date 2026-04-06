@@ -8,6 +8,7 @@ from refactor.rules.pytest_migration import (
     AddPytestImport,
     ConvertAssertions,
     ConvertAssertRaises,
+    ConvertExceptionToValue,
     ConvertSetUpTearDown,
     ConvertUnittestDecorators,
     RemoveTestWrapperImport,
@@ -790,3 +791,55 @@ def test_no_mixin_init_override_for_pure_testcase():
 
     assert "class TestFoo:" in result
     assert "__init__ = None" not in result
+
+
+# ---------------------------------------------------------------------------
+# Issue #27: assertIsNone / assertIsNotNone operator tests
+# ---------------------------------------------------------------------------
+
+
+def test_assert_is_none_uses_is():
+    """assertIsNone(x) must produce 'assert x is None', not 'assert x == None'."""
+    result = _assert("self.assertIsNone(x)\n")
+    assert result == "assert x is None\n"
+
+
+def test_assert_is_not_none_uses_is_not():
+    """assertIsNotNone(x) must produce 'assert x is not None', not 'assert x != None'."""
+    result = _assert("self.assertIsNotNone(x)\n")
+    assert result == "assert x is not None\n"
+
+
+# ---------------------------------------------------------------------------
+# Issue #26: super().asyncSetUp() removal tests
+# ---------------------------------------------------------------------------
+
+
+def test_remove_super_async_setup():
+    """await super().asyncSetUp() must be removed by ConvertSetUpTearDown."""
+    source = """\
+        async def asyncSetUp(self):
+            await super().asyncSetUp()
+            self.foo = 1
+        """
+    result = _setup(source)
+    assert "super().asyncSetUp()" not in result
+    assert "self.foo = 1" in result
+
+
+# ---------------------------------------------------------------------------
+# Issue #25: cm.exception -> cm.value tests
+# ---------------------------------------------------------------------------
+
+
+def test_convert_exception_to_value():
+    """cm.exception must be converted to cm.value."""
+    source = """\
+        with self.assertRaises(ValueError) as cm:
+            do_something()
+        assert cm.exception is not None
+        """
+    result = _run(ConvertAssertRaises, ConvertExceptionToValue, source=textwrap.dedent(source))
+    assert "cm.value" in result
+    assert "cm.exception" not in result
+    assert "pytest.raises(ValueError)" in result
