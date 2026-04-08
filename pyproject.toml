@@ -68,6 +68,15 @@ ignore = ["E501"]
     "W293",  # whitespace on blank line (test fixtures with intentional whitespace)
     "UP006", "UP007", "UP035",
 ]
+"tests/extractors/*.py" = [
+    "B011",  # assert False
+    "B007",  # unused loop variable
+    "B905",  # zip strict
+    "F841",  # unused variable
+    "UP006", "UP007", "UP035",
+]
+# Fixture files — sample code for testing, not production
+"tests/extractors/fixtures/**/*.py" = ["ALL"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
