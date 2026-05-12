@@ -37,12 +37,12 @@ class AsyncioGetEventLoopRule(Rule):
                 break
             if isinstance(parent_node, (ast.FunctionDef, ast.Lambda)):
                 # Found a sync function or lambda — not a valid context
-                assert False
+                return None
             # Continue walking up
             parent_field, parent_node = self.context.ancestry.infer(parent_node)
         else:
             # Reached module level without finding an async def
-            assert False
+            return None
 
         # Transform: replace get_event_loop with get_running_loop
         new_node = clone(node)
