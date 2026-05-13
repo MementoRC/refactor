@@ -40,7 +40,7 @@ def main() -> int:
         metavar="GROUP",
         help=(
             "Enable an opt-in rule group. May be passed multiple times. "
-            "Available groups: " + ", ".join(sorted(OPTIN_RULE_GROUPS) | {"all"})
+            "Available groups: " + ", ".join(sorted(set(OPTIN_RULE_GROUPS) | {"all"}))
             if OPTIN_RULE_GROUPS
             else "Enable an opt-in rule group (no groups available in this build)."
         ),
