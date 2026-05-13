@@ -13,6 +13,7 @@ from __future__ import annotations
 from refactor.rules.py312_migration.asyncio_modern import (
     AsyncioEnsureFutureRule,
     AsyncioGetEventLoopRule,
+    AsyncioWaitForToTimeoutRule,
 )
 from refactor.rules.py312_migration.datetime_modern import (
     DatetimeUtcfromtimestampRule,
@@ -36,8 +37,13 @@ from refactor.rules.py312_migration.inspect_modern import (
     InspectFormatargspecRule,
     InspectGetargspecRule,
 )
+from refactor.rules.py312_migration.open_encoding import OpenEncodingRule
+from refactor.rules.py312_migration.override_decorator import OverrideDecoratorRule
+from refactor.rules.py312_migration.stdlib_additions import BatchedRule, PairwiseRule
 from refactor.rules.py312_migration.stdlib_removed import RemovedStdlibImportRule
 from refactor.rules.py312_migration.typing_modern import (
+    PEP695GenericClassRule,
+    PEP695TypeAliasRule,
     TypingDeprecatedAliasRule,
     TypingOptionalRule,
     TypingTypeRule,
@@ -78,11 +84,20 @@ IDIOMATIC_RULES = [
     TypingOptionalRule,
 ]
 
-OPTIN_RULE_GROUPS: dict[str, list] = {}  # Filled in Phase 3
+OPTIN_RULE_GROUPS = {
+    "asyncio-timeout": [AsyncioWaitForToTimeoutRule],
+    "pep695-types": [PEP695TypeAliasRule],
+    "pep695-generics": [PEP695GenericClassRule],
+    "override-decorator": [OverrideDecoratorRule],
+    "encoding-warning": [OpenEncodingRule],
+    "itertools-modern": [PairwiseRule, BatchedRule],
+}
 
 __all__ = [
     "AsyncioEnsureFutureRule",
     "AsyncioGetEventLoopRule",
+    "AsyncioWaitForToTimeoutRule",
+    "BatchedRule",
     "DatetimeUtcfromtimestampRule",
     "DatetimeUtcnowRule",
     "DistutilsCommandRule",
@@ -96,6 +111,11 @@ __all__ = [
     "InspectGetargspecRule",
     "IntEnumRule",
     "LruCacheToCacheRule",
+    "OpenEncodingRule",
+    "OverrideDecoratorRule",
+    "PEP695GenericClassRule",
+    "PEP695TypeAliasRule",
+    "PairwiseRule",
     "RemovedStdlibImportRule",
     "StrEnumRule",
     "TypingDeprecatedAliasRule",
