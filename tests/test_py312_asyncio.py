@@ -1,4 +1,4 @@
-"""Tests for AsyncioGetEventLoopRule (Phase 1) and AsyncioEnsureFutureRule (Phase 2)."""
+"""Tests for AsyncioGetEventLoopRule (Phase 1), AsyncioEnsureFutureRule (Phase 2), and AsyncioWaitForToTimeoutRule (Phase 3)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from refactor import Session
 from refactor.rules.py312_migration.asyncio_modern import (
     AsyncioEnsureFutureRule,
     AsyncioGetEventLoopRule,
+    AsyncioWaitForToTimeoutRule,
 )
 
 
@@ -186,3 +187,81 @@ class TestAsyncioEnsureFutureRule:
         """
         result = _run(AsyncioGetEventLoopRule, AsyncioEnsureFutureRule, source=source)
         assert result == textwrap.dedent(expected)
+
+
+class TestAsyncioWaitForToTimeoutRule:
+    """Test AsyncioWaitForToTimeoutRule transformations (Phase 3, opt-in)."""
+
+    def test_kwarg_timeout_form(self):
+        """Test: await asyncio.wait_for(coro, timeout=T) -> async with asyncio.timeout(T): await coro."""
+        source = """\
+            import asyncio
+
+            async def foo():
+                await asyncio.wait_for(coro, timeout=5)
+        """
+        expected = """\
+            import asyncio
+
+            async def foo():
+                async with asyncio.timeout(5):
+                    await coro
+        """
+        result = _run(AsyncioWaitForToTimeoutRule, source=source)
+        assert result == textwrap.dedent(expected)
+
+    def test_positional_timeout_form(self):
+        """Test: await asyncio.wait_for(coro, T) -> async with asyncio.timeout(T): await coro."""
+        source = """\
+            import asyncio
+
+            async def foo():
+                await asyncio.wait_for(coro, 5)
+        """
+        expected = """\
+            import asyncio
+
+            async def foo():
+                async with asyncio.timeout(5):
+                    await coro
+        """
+        result = _run(AsyncioWaitForToTimeoutRule, source=source)
+        assert result == textwrap.dedent(expected)
+
+    def test_assigned_await_no_transform(self):
+        """Test: result = await asyncio.wait_for(coro, timeout=5) should NOT be transformed.
+
+        The await is inside an ast.Assign, not an ast.Expr statement, so the
+        rule does not match and the source is returned unchanged.
+        """
+        source = """\
+            import asyncio
+
+            async def foo():
+                result = await asyncio.wait_for(coro, timeout=5)
+        """
+        result = _run(AsyncioWaitForToTimeoutRule, source=source)
+        assert result == textwrap.dedent(source)
+
+    def test_inside_sync_def_no_transform(self):
+        """Test: wait_for in sync def (no await statement) should NOT be transformed."""
+        source = """\
+            import asyncio
+
+            def foo():
+                result = asyncio.run(asyncio.wait_for(coro, timeout=5))
+        """
+        result = _run(AsyncioWaitForToTimeoutRule, source=source)
+        assert result == textwrap.dedent(source)
+
+    def test_idempotency(self):
+        """Test: already-transformed code (async with asyncio.timeout) is not re-fired."""
+        source = """\
+            import asyncio
+
+            async def foo():
+                async with asyncio.timeout(5):
+                    await coro
+        """
+        result = _run(AsyncioWaitForToTimeoutRule, source=source)
+        assert result == textwrap.dedent(source)
