@@ -1,11 +1,14 @@
-"""Tests for AsyncioGetEventLoopRule (Phase 1)."""
+"""Tests for AsyncioGetEventLoopRule (Phase 1) and AsyncioEnsureFutureRule (Phase 2)."""
 
 from __future__ import annotations
 
 import textwrap
 
 from refactor import Session
-from refactor.rules.py312_migration.asyncio_modern import AsyncioGetEventLoopRule
+from refactor.rules.py312_migration.asyncio_modern import (
+    AsyncioEnsureFutureRule,
+    AsyncioGetEventLoopRule,
+)
 
 
 def _run(*rules, source: str) -> str:
@@ -105,3 +108,81 @@ class TestAsyncioGetEventLoopRule:
         """
         result = _run(AsyncioGetEventLoopRule, source=source)
         assert result == textwrap.dedent(source)
+
+
+class TestAsyncioEnsureFutureRule:
+    """Test AsyncioEnsureFutureRule transformations."""
+
+    def test_inside_async_def(self):
+        """Test: asyncio.ensure_future(coro) inside async def should be transformed."""
+        source = """\
+            import asyncio
+
+            async def foo():
+                task = asyncio.ensure_future(coro())
+                return task
+        """
+        expected = """\
+            import asyncio
+
+            async def foo():
+                task = asyncio.create_task(coro())
+                return task
+        """
+        result = _run(AsyncioEnsureFutureRule, source=source)
+        assert result == textwrap.dedent(expected)
+
+    def test_inside_sync_def_no_transform(self):
+        """Test: asyncio.ensure_future(coro) inside sync def should NOT be transformed."""
+        source = """\
+            import asyncio
+
+            def foo():
+                task = asyncio.ensure_future(coro())
+                return task
+        """
+        result = _run(AsyncioEnsureFutureRule, source=source)
+        assert result == textwrap.dedent(source)
+
+    def test_at_module_level_no_transform(self):
+        """Test: asyncio.ensure_future(coro) at module level should NOT be transformed."""
+        source = """\
+            import asyncio
+
+            task = asyncio.ensure_future(coro())
+        """
+        result = _run(AsyncioEnsureFutureRule, source=source)
+        assert result == textwrap.dedent(source)
+
+    def test_create_task_unchanged(self):
+        """Test: asyncio.create_task(coro) in async def should NOT be re-transformed (idempotent)."""
+        source = """\
+            import asyncio
+
+            async def foo():
+                task = asyncio.create_task(coro())
+                return task
+        """
+        result = _run(AsyncioEnsureFutureRule, source=source)
+        assert result == textwrap.dedent(source)
+
+    def test_both_rules_together(self):
+        """Test: file with both get_event_loop and ensure_future in async def — both transform."""
+        source = """\
+            import asyncio
+
+            async def foo():
+                loop = asyncio.get_event_loop()
+                task = asyncio.ensure_future(coro())
+                return loop, task
+        """
+        expected = """\
+            import asyncio
+
+            async def foo():
+                loop = asyncio.get_running_loop()
+                task = asyncio.create_task(coro())
+                return loop, task
+        """
+        result = _run(AsyncioGetEventLoopRule, AsyncioEnsureFutureRule, source=source)
+        assert result == textwrap.dedent(expected)

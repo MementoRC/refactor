@@ -10,7 +10,10 @@ Phase 3 rules (OPTIN_RULE_GROUPS) are high-risk/semantic-changing and opt-in onl
 
 from __future__ import annotations
 
-from refactor.rules.py312_migration.asyncio_modern import AsyncioGetEventLoopRule
+from refactor.rules.py312_migration.asyncio_modern import (
+    AsyncioEnsureFutureRule,
+    AsyncioGetEventLoopRule,
+)
 from refactor.rules.py312_migration.datetime_modern import (
     DatetimeUtcfromtimestampRule,
     DatetimeUtcnowRule,
@@ -24,11 +27,21 @@ from refactor.rules.py312_migration.distutils import (
     DistutilsUtilStrtoboolRule,
     DistutilsVersionRule,
 )
+from refactor.rules.py312_migration.enum_modern import (
+    IntEnumRule,
+    StrEnumRule,
+)
+from refactor.rules.py312_migration.functools_modern import LruCacheToCacheRule
 from refactor.rules.py312_migration.inspect_modern import (
     InspectFormatargspecRule,
     InspectGetargspecRule,
 )
 from refactor.rules.py312_migration.stdlib_removed import RemovedStdlibImportRule
+from refactor.rules.py312_migration.typing_modern import (
+    TypingDeprecatedAliasRule,
+    TypingOptionalRule,
+    TypingTypeRule,
+)
 
 CORE_RULES = [
     # distutils removal (py3.12 removes distutils entirely)
@@ -51,11 +64,24 @@ CORE_RULES = [
     InspectFormatargspecRule,
 ]
 
-IDIOMATIC_RULES: list = []  # Filled in Phase 2
+IDIOMATIC_RULES = [
+    # functools cache modernization
+    LruCacheToCacheRule,
+    # asyncio create_task in async contexts
+    AsyncioEnsureFutureRule,
+    # enum mixins -> StrEnum / IntEnum
+    StrEnumRule,
+    IntEnumRule,
+    # typing aliases -> builtin generics (pyupgrade edge cases)
+    TypingDeprecatedAliasRule,
+    TypingTypeRule,
+    TypingOptionalRule,
+]
 
 OPTIN_RULE_GROUPS: dict[str, list] = {}  # Filled in Phase 3
 
 __all__ = [
+    "AsyncioEnsureFutureRule",
     "AsyncioGetEventLoopRule",
     "DatetimeUtcfromtimestampRule",
     "DatetimeUtcnowRule",
@@ -68,7 +94,13 @@ __all__ = [
     "DistutilsVersionRule",
     "InspectFormatargspecRule",
     "InspectGetargspecRule",
+    "IntEnumRule",
+    "LruCacheToCacheRule",
     "RemovedStdlibImportRule",
+    "StrEnumRule",
+    "TypingDeprecatedAliasRule",
+    "TypingOptionalRule",
+    "TypingTypeRule",
     "CORE_RULES",
     "IDIOMATIC_RULES",
     "OPTIN_RULE_GROUPS",
