@@ -4,6 +4,7 @@ import ast
 import sys
 
 from refactor import Replace
+from refactor.actions import InsertBefore
 from refactor.common import clone
 from refactor.core import Rule
 
@@ -316,3 +317,86 @@ class PEP695GenericClassRule(Rule):
         new_class.bases = new_bases
         ast.fix_missing_locations(new_class)
         return Replace(node, new_class)
+
+
+def _has_future_annotations(tree: ast.AST) -> bool:
+    """Return True if the module already imports `annotations` from `__future__`."""
+    if not isinstance(tree, ast.Module):
+        return False
+    for stmt in tree.body:
+        if isinstance(stmt, ast.ImportFrom) and stmt.module == "__future__":
+            if any(alias.name == "annotations" for alias in stmt.names):
+                return True
+    return False
+
+
+def _iter_annotations(tree: ast.Module):
+    """Yield every annotation expression node in the module."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.arg) and node.annotation is not None:
+            yield node.annotation
+        elif (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.returns is not None
+        ):
+            yield node.returns
+        elif isinstance(node, ast.AnnAssign):
+            yield node.annotation
+
+
+def _contains_pep604_union(annotation: ast.AST) -> bool:
+    """Return True if an annotation subtree contains a PEP 604 (X | Y) union."""
+    return any(
+        isinstance(sub, ast.BinOp) and isinstance(sub.op, ast.BitOr)
+        for sub in ast.walk(annotation)
+    )
+
+
+def _module_uses_pep604_union(tree: ast.Module) -> bool:
+    return any(_contains_pep604_union(ann) for ann in _iter_annotations(tree))
+
+
+def _future_anchor_index(body: list[ast.stmt]) -> int:
+    """Index of the statement the future import must precede (after a docstring)."""
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
+        return 1
+    return 0
+
+
+class EnsureFutureAnnotationsImportRule(Rule):
+    """Insert ``from __future__ import annotations`` when modernized annotations
+    use PEP 604 unions (``X | None``) but the module lacks the future import.
+
+    TypingOptionalRule rewrites ``Optional[X]`` to ``X | None``. Without the
+    future import, that annotation is evaluated eagerly at definition time, which
+    raises ``TypeError`` for forward references (``Optional["Foo"]`` becomes
+    ``"Foo" | None``). Importing ``annotations`` makes annotations lazy strings,
+    fixing the whole class of runtime breakage from emitted unions.
+    """
+
+    def match(self, node: ast.AST) -> InsertBefore | None:
+        assert isinstance(node, ast.stmt)
+
+        tree = self.context.tree
+        assert isinstance(tree, ast.Module)
+
+        body = tree.body
+        anchor_index = _future_anchor_index(body)
+        assert anchor_index < len(body)
+        # Fire once, anchored on the statement that should follow the import.
+        assert node is body[anchor_index]
+
+        assert not _has_future_annotations(tree)
+        assert _module_uses_pep604_union(tree)
+
+        future_import = ast.ImportFrom(
+            module="__future__",
+            names=[ast.alias(name="annotations")],
+            level=0,
+        )
+        return InsertBefore(node, target=future_import)

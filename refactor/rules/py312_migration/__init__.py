@@ -42,6 +42,7 @@ from refactor.rules.py312_migration.override_decorator import OverrideDecoratorR
 from refactor.rules.py312_migration.stdlib_additions import BatchedRule, PairwiseRule
 from refactor.rules.py312_migration.stdlib_removed import RemovedStdlibImportRule
 from refactor.rules.py312_migration.typing_modern import (
+    EnsureFutureAnnotationsImportRule,
     PEP695GenericClassRule,
     PEP695TypeAliasRule,
     TypingDeprecatedAliasRule,
@@ -82,6 +83,7 @@ IDIOMATIC_RULES = [
     TypingDeprecatedAliasRule,
     TypingTypeRule,
     TypingOptionalRule,
+    EnsureFutureAnnotationsImportRule,
 ]
 
 OPTIN_RULE_GROUPS = {
@@ -107,6 +109,7 @@ __all__ = [
     "DistutilsSysconfigRule",
     "DistutilsUtilStrtoboolRule",
     "DistutilsVersionRule",
+    "EnsureFutureAnnotationsImportRule",
     "InspectFormatargspecRule",
     "InspectGetargspecRule",
     "IntEnumRule",
