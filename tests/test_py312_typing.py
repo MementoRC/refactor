@@ -9,6 +9,7 @@ import pytest
 
 from refactor import Session
 from refactor.rules.py312_migration.typing_modern import (
+    EnsureFutureAnnotationsImportRule,
     PEP695GenericClassRule,
     PEP695TypeAliasRule,
     TypingDeprecatedAliasRule,
@@ -318,3 +319,79 @@ class TestPEP695GenericClassRule:
                 pass
             """
         assert _run(PEP695GenericClassRule, source=source) == textwrap.dedent(source)
+
+
+# ---------------------------------------------------------------------------
+# EnsureFutureAnnotationsImportRule
+# ---------------------------------------------------------------------------
+
+
+def test_optional_emission_adds_future_import():
+    source = """\
+        from typing import Optional
+
+        def foo(x: Optional[int]) -> None:
+            pass
+        """
+    result = _run(TypingOptionalRule, EnsureFutureAnnotationsImportRule, source=source)
+    assert "int | None" in result
+    assert result.count("from __future__ import annotations") == 1
+
+
+def test_forward_ref_union_adds_future_import():
+    source = """\
+        from typing import Optional
+
+        def foo(x: Optional["Foo"]) -> None:
+            pass
+        """
+    result = _run(TypingOptionalRule, EnsureFutureAnnotationsImportRule, source=source)
+    assert result.count("from __future__ import annotations") == 1
+
+
+def test_future_import_not_duplicated_when_present():
+    source = """\
+        from __future__ import annotations
+
+        from typing import Optional
+
+        def foo(x: Optional[int]) -> None:
+            pass
+        """
+    result = _run(TypingOptionalRule, EnsureFutureAnnotationsImportRule, source=source)
+    assert "int | None" in result
+    assert result.count("from __future__ import annotations") == 1
+
+
+def test_future_import_inserted_after_docstring():
+    source = '''\
+        """Module docstring."""
+
+        from typing import Optional
+
+        def foo(x: Optional[int]) -> None:
+            pass
+        '''
+    result = _run(TypingOptionalRule, EnsureFutureAnnotationsImportRule, source=source)
+    assert result.count("from __future__ import annotations") == 1
+    assert result.index('"""Module docstring."""') < result.index(
+        "from __future__ import annotations"
+    )
+
+
+def test_no_future_import_when_no_union():
+    source = """\
+        def foo(x: int) -> None:
+            pass
+        """
+    result = _run(EnsureFutureAnnotationsImportRule, source=source)
+    assert "from __future__ import annotations" not in result
+
+
+def test_no_future_import_for_runtime_bitor():
+    source = """\
+        def foo(a, b):
+            return a | b
+        """
+    result = _run(EnsureFutureAnnotationsImportRule, source=source)
+    assert "from __future__ import annotations" not in result
